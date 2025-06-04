@@ -1,6 +1,6 @@
 module magic-survival
 
-go 1.24.2
+go 1.23
 
 require (
 	github.com/ebitengine/gomobile v0.0.0-20240911145611-4856209ac325 // indirect
