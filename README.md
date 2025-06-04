@@ -7,7 +7,7 @@
 ## ✨ Destaques
 
 - 🌙 **Ciclo Dia/Noite**: Explore durante o dia, sobreviva à noite.
-- 🔮 **Feitiços e Poções**: git iencantamentos.
+- 🔮 **Feitiços e Poções**: crie encantamentos.
 - 🏕️ **Abrigos e Defesa**: Construa proteções mágicas contra criaturas sombrias.
 - 🧙‍♂️ **Progressão**: Evolua suas habilidades mágicas e descubra os segredos da floresta.
 
@@ -30,3 +30,10 @@
 
 ```bash
 go get github.com/hajimehoshi/ebiten/v2
+```
+
+### Executar o jogo
+
+```bash
+go run ./...
+```
