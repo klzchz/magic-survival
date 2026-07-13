@@ -1,0 +1,16 @@
+# Godot 3
+.import/
+export.cfg
+export_presets.cfg
+*.translation
+
+# Godot 4 (in case of future migration)
+.godot/
+
+# Mono
+.mono/
+data_*/
+
+# System
+.DS_Store
+Thumbs.db
