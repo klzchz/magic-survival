@@ -274,6 +274,8 @@ func start_game(character: String, seed_value := -1) -> void:
 	run_hearts = 0
 	objective_step = 0
 	obj_flags = {}
+	_autopilot = false  # dev autopilot never carries into a new run
+	_auto_i = 1
 	cancel_placement()
 	camera_rig.angle = 0.0
 	for p in players():
@@ -898,6 +900,9 @@ func tick(delta: float) -> void:
 
 func _drive_local(delta: float) -> void:
 	var mv := Vector3.ZERO
+	if _autopilot and (Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
+			or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT)):
+		_autopilot = false  # a human took the controls: never fight their input
 	if _autopilot:
 		var pts: Array = trail + [shrine_center]
 		if _auto_i < pts.size():
