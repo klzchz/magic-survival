@@ -169,6 +169,14 @@
    }
   },
   {
+   "id": "wand_jade",
+   "tab": "Magia",
+   "cost": {
+    "wand": 1,
+    "core_jade": 1
+   }
+  },
+  {
    "id": "talisman_guard",
    "tab": "Magia",
    "cost": {

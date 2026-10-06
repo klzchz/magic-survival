@@ -608,6 +608,79 @@ func _initialize() -> void:
 	_check(is_equal_approx(w.exploration.discovered_ratio(), revealed), "explored area survives save/continue")
 	_check(w.exploration.base.get("kind", "") == "campfire" and w.exploration.markers.size() == 1, "base and pins survive save/continue")
 
+	# ---------- School-Temple + Jade Naga (design/gdd/special-locations.md) ----------
+	w.start_game("aldric")
+	p = w.local_player
+	_force_day(w)
+	var ti: Dictionary = w.temple_info
+	_check(not ti.is_empty() and w.guardians().size() == 1, "the School-Temple is built with its guardian")
+	var arena: Vector3 = ti.arena
+	_check(w.terrain.biome_at(arena.x, arena.z) == "flowered" and absf(arena.x) < Cfg.WORLD - 20 and absf(arena.z) < Cfg.WORLD - 20, "the temple sits in the flowered biome, inside the island")
+	var loose := 0
+	var to_local: Transform3D = ti.root.transform.affine_inverse()
+	for g in w.resources():
+		var lp: Vector3 = to_local * g.position
+		if absf(lp.x) < 9.0 and lp.z > -20.0 and lp.z < 18.0:  # inside the walls
+			loose += 1
+	_check(loose <= 9 and loose >= 5, "only the temple's own loot lies inside (%d)" % loose)
+	var seal_at: Vector3 = ti.seal.global_position  # the sanctum door
+	var seal_push: Vector3 = w.resolve_collision(Vector3(seal_at.x, 0, seal_at.z))
+	_check(Vector2(seal_push.x - seal_at.x, seal_push.z - seal_at.z).length() > 0.2, "the jade seal blocks the sanctum")
+	_check(not w.dungeons.temple.discovered and w.map_landmarks().filter(func(l): return l.has("status")).is_empty(), "undiscovered: not on the map")
+	p.position = w.terrain.on_ground(ti.gate.lerp(arena, 0.4))  # at the courtyard
+	w._tick_dungeons(0.1)
+	var marks: Array = w.map_landmarks().filter(func(l): return l.has("status"))
+	_check(w.dungeons.temple.discovered and marks.size() == 1 and marks[0].status == "explored", "approaching discovers it: 'explored' on the map")
+	var naga = w.guardians()[0]
+	_check(naga.state == "dormant", "the Jade Naga sleeps until someone enters the hall")
+	p.position = w.terrain.on_ground(arena + Vector3(3, 0, 0))
+	naga.tick(0.1, w)
+	_check(naga.awake(), "stepping into the arena wakes it")
+	naga._start("sweep", 0.9, p.position - naga.position)
+	_check(naga.hits(p.position, 0.0), "the tail sweep ring covers a body standing in it")
+	_check(not naga.hits(p.position, 1.0), "jumping clears the tail sweep")
+	_check(not naga.hits(naga.position + Vector3(6, 0, 0), 0.0), "stepping out of the ring dodges it")
+	var naga_hp_before: float = p.health
+	naga.state_t = 0.01
+	naga.tick(0.05, w)
+	_check(p.health < naga_hp_before and naga.state == "recover", "the blow lands only when the telegraph ends, then it rests")
+	naga._start("spit", 0.8, Vector3(0, 0, 1))
+	_check(naga.hits(naga.position + Vector3(0, 0, 6), 0.0) and not naga.hits(naga.position + Vector3(3, 0, 6), 0.0), "the spit lane hits in line, a side-step dodges it")
+	naga._clear_telegraph()
+	naga._set_state("chase", 0.0)
+	p.mana = 150.0
+	var naga_hp: float = naga.hp
+	w.perform(p, "bolt")
+	_check(naga.hp < naga_hp, "the Arcane Bolt hits the guardian")
+	_check(naga.hp_max <= 5.0 * 60.0 + 60.0, "the starter wand (5 bolts) + a few blows can beat it")
+	p.position = w.terrain.on_ground(naga.position + Vector3(1.5, 0, 0))
+	naga_hp = naga.hp
+	w.perform(p, "interact")
+	_check(naga.hp < naga_hp, "E next to the guardian strikes it")
+	p.position = w.terrain.on_ground(arena + Vector3(40, 0, 0))  # flee
+	for i in range(8):
+		naga.tick(1.0, w)
+	_check(naga.state == "dormant" and is_equal_approx(naga.hp, naga.hp_max), "fleeing lets it sleep and heal (flee and come back)")
+	p.position = w.terrain.on_ground(arena + Vector3(2, 0, 0))
+	w._damage_guardian(p, naga, 9999.0)
+	_check(w.dungeons.temple.cleared and w.guardians().is_empty(), "defeated: the temple is cleared")
+	_check(not ti.seal.visible, "the jade seal opens")
+	var rewards: Array = w.ground_items("core_jade")
+	_check(rewards.size() == 1, "the Jade Core appears once in the sanctum")
+	marks = w.map_landmarks().filter(func(l): return l.has("status"))
+	_check(marks[0].status == "cleared", "the map marks it as cleared")
+	_check(w.save_run() and w.continue_run(), "save + continue after clearing")
+	_check(w.guardians().is_empty() and w.dungeons.temple.cleared and not w.temple_info.seal.visible, "loading keeps it cleared: no guardian, seal open")
+	_check(w.ground_items("core_jade").size() == 1, "loading does not duplicate the reward")
+	p = w.local_player
+	var core = w.ground_items("core_jade")[0]
+	p.position = core.position
+	w.perform(p, "interact")
+	_check(p.inventory.count("core_jade") == 1 and w.ground_items("core_jade").is_empty(), "the reward is picked up")
+	_check(w.save_run() and w.continue_run(), "save + continue after taking it")
+	_check(w.ground_items("core_jade").is_empty() and w.local_player.inventory.count("core_jade") == 1 and w.guardians().is_empty(), "returning never respawns the reward or the guardian")
+	_check(Data.recipe("wand_jade").get("cost", {}).has("core_jade"), "the Altar sets the Jade Core into a Jade Wand")
+
 	# ---------- save / continue ----------
 	w.start_game("aldric")
 	p = w.local_player

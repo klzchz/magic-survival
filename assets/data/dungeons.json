@@ -1,0 +1,23 @@
+{
+ "temple": {
+  "name": "Escola-Templo das Mil Lanternas",
+  "discover_radius": 24,
+  "arena_radius": 9,
+  "leash_radius": 15,
+  "reset_after": 6,
+  "reward": "core_jade",
+  "loot": {"mushroom": 3, "berry_bush": 2, "flint": 3, "essence": 1, "elixir": 1},
+  "guardian": {
+   "name": "Naga de Jade",
+   "hp": 260,
+   "speed": 2.6,
+   "wake_radius": 7,
+   "melee_damage": 10,
+   "attacks": {
+    "sweep": {"telegraph": 0.9, "radius": 4.0, "damage": 18, "range": 3.5},
+    "spit": {"telegraph": 0.8, "length": 10.0, "width": 1.6, "damage": 14, "range": 9.0}
+   },
+   "recover": 1.6
+  }
+ }
+}

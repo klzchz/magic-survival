@@ -43,6 +43,9 @@ var obj_title: Label
 var obj_text: Label
 var _craft_refresh_t := 0.0
 var lbl_prompt: Label            # "E — Coletar Tufo de palha" (or why it fails)
+var boss_panel: Panel            # guardian name + health while it is awake
+var boss_name: Label
+var boss_fill: ColorRect
 
 
 func _panel_style(alpha := 0.62, radius := 8) -> StyleBoxFlat:
@@ -94,6 +97,30 @@ func _ready() -> void:
 	lbl_prompt.size = Vector2(800, 40)
 	lbl_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_prompt.visible = false
+
+	boss_panel = Panel.new()
+	boss_panel.position = Vector2(390, 120)
+	boss_panel.size = Vector2(500, 46)
+	boss_panel.add_theme_stylebox_override("panel", _panel_style(0.7))
+	boss_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boss_panel.visible = false
+	root.add_child(boss_panel)
+	boss_name = _label(boss_panel, "", Vector2(10, 2), 15, title_font)
+	boss_name.size = Vector2(480, 20)
+	boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	boss_name.add_theme_color_override("font_color", Color(0.6, 1.0, 0.7))
+	var back := ColorRect.new()
+	back.position = Vector2(12, 26)
+	back.size = Vector2(476, 12)
+	back.color = Color(0, 0, 0, 0.6)
+	back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boss_panel.add_child(back)
+	boss_fill = ColorRect.new()
+	boss_fill.position = Vector2(12, 26)
+	boss_fill.size = Vector2(476, 12)
+	boss_fill.color = Color(0.3, 0.9, 0.5)
+	boss_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	boss_panel.add_child(boss_fill)
 
 	var hint := _label(root, "WASD mover · Espaço saltar · Q/PgUp câmera · roda zoom · E coletar · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · M mapa", Vector2(140, 624), 12)
 	hint.size = Vector2(1000, 20)
@@ -399,6 +426,17 @@ func _process(delta: float) -> void:
 		msg_t -= delta
 		if msg_t <= 0.0:
 			lbl_msg.visible = false
+
+
+## Guardian health bar (empty name hides it).
+func set_boss(n: String, hp: float, hp_max: float) -> void:
+	if boss_panel == null:
+		return
+	boss_panel.visible = n != ""
+	if n == "":
+		return
+	boss_name.text = "%s  %d/%d" % [n, int(hp), int(hp_max)]
+	boss_fill.size.x = 476.0 * clampf(hp / maxf(1.0, hp_max), 0.0, 1.0)
 
 
 ## Bottom-centre prompt for the E target; red when it can't be done.

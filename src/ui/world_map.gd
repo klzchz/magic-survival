@@ -130,6 +130,13 @@ func _draw_map() -> void:
 		var wp: Vector3 = poi.pos
 		if ex.is_discovered(wp):
 			var sp := to_screen(wp.x, wp.z)
+			var status: String = poi.get("status", "")
+			if status != "":  # special location: white ring = explored, gold + check = cleared
+				var done := status == "cleared"
+				canvas.draw_circle(sp, 9.0, GOLD if done else Color(1, 1, 1, 0.95))
+				canvas.draw_circle(sp, 6.5, poi.color)
+				canvas.draw_string(font, sp + Vector2(12, 5), poi.name + ("  ✓ concluído" if done else "  · explorado"), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, GOLD if done else Color(1, 0.95, 0.85))
+				continue
 			canvas.draw_circle(sp, 5.0, Color(1, 1, 1, 0.9))
 			canvas.draw_circle(sp, 3.5, poi.color)
 			canvas.draw_string(font, sp + Vector2(8, 4), poi.name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 0.95, 0.85))

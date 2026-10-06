@@ -247,5 +247,23 @@
   "noise_per_sec": 2.5,
   "icon": "lantern",
   "desc": "Luz forte (raio 11) por 150 s. Não fere Errantes e gera ruído (2,5/s) enquanto acesa na mão."
+ },
+ "core_jade": {
+  "name": "Núcleo de Jade",
+  "stack": 5,
+  "icon": "core_jade",
+  "where": "Recompensa da Naga de Jade, na Escola-Templo das Mil Lanternas.",
+  "desc": "Núcleo equilibrado: no Altar, vira Varinha de Jade (dano x1,35, mana x0,9, ruído x1,1)."
+ },
+ "wand_jade": {
+  "name": "Varinha de Jade",
+  "stack": 1,
+  "equip": "hand",
+  "spell_damage": 1.35,
+  "spell_cost": 0.9,
+  "noise_mult": 1.1,
+  "uses": 90,
+  "icon": "wand_jade",
+  "desc": "Equilíbrio: dano x1,35 (81), mana x0,9 (18), ruído x1,1 (20). 90 feitiços."
  }
 }

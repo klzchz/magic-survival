@@ -15,6 +15,8 @@ const Dev = preload("res://src/core/dev.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
 const Lanna = preload("res://src/core/lanna.gd")
 const Sfx = preload("res://src/core/sfx.gd")
+const SchoolTemple = preload("res://src/gameplay/builders/school_temple.gd")
+const GuardianScript = preload("res://src/ai/guardian.gd")
 const SOLID := {"tree": 0.8, "rock": 0.85, "berry_bush": 0.6}   # collision radius per resource kind
 const OBJECTIVES := ["gather", "tool", "fire", "shrine", "page"]
 const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
@@ -101,6 +103,11 @@ var _approach = null       # resource the local apprentice is walking to (E from
 var _approach_t := 0.0
 var _focus_ring: MeshInstance3D   # highlight under the E target
 var _focus_label: Label3D         # "E — Coletar Tufo de palha" / why it fails
+var _solid_boxes: Array = []      # [{c: Vector2, half: Vector2, rot: float, node}] walls of built places
+var dungeons := {}                # id -> {"discovered": bool, "cleared": bool} (saved with the run)
+var temple_center := Vector2.ZERO # School-Temple of a Thousand Lanterns
+var temple_info := {}             # builder output: arena, reward, seal, loot spots
+var guardians_root: Node3D
 
 
 func _ready() -> void:
@@ -179,6 +186,12 @@ func continue_run() -> bool:
 	obj_flags = data.get("obj_flags", {})
 	if data.has("exploration"):
 		exploration.from_save(data.exploration)
+	var saved_dungeons = data.get("dungeons", {})
+	for id in saved_dungeons:
+		if dungeons.has(id):
+			dungeons[id]["discovered"] = bool(saved_dungeons[id].get("discovered", false))
+			dungeons[id]["cleared"] = bool(saved_dungeons[id].get("cleared", false))
+	_sync_dungeons()
 	var p = local_player
 	var ps: Dictionary = data.player
 	p.position = RunSave.vec(ps.pos)
@@ -650,10 +663,16 @@ func _ruins_pos() -> Vector3:
 func _generate_world(seed_value := -1) -> void:
 	world_seed = seed_value if seed_value >= 0 else randi() % 2000000000
 	seed(world_seed)  # same seed -> same island (relief, lakes, decor, resources)
-	for root in [shadows_root, resources_root, structures_root, decor_root]:
+	if guardians_root == null:
+		guardians_root = Node3D.new()
+		guardians_root.name = "Guardians"
+		add_child(guardians_root)
+	for root in [shadows_root, resources_root, structures_root, decor_root, guardians_root]:
 		for n in root.get_children():
 			_despawn(n)
 	portal = null
+	_solid_boxes.clear()
+	dungeons = {"temple": {"discovered": false, "cleared": false}}
 
 	# ---- layout (design/gdd/world-biomes.md) ----
 	var rc := _ruins_center()
@@ -673,19 +692,25 @@ func _generate_world(seed_value := -1) -> void:
 	lamp_road = [Vector2(-8, -8), Vector2(-28, -32) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), gate + (Vector2.ZERO - gate).normalized() * 30.0, gate]
 	waystone_path = [Vector2(8, -8), Vector2(30, -35) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), d_entry + (Vector2.ZERO - d_entry).normalized() * 28.0, d_entry]
 	north_road = [gothic_center + Vector2(24, -14), Vector2(0, -132) + Vector2(randf_range(-10, 10), 0), desert_center + Vector2(-28, -18)]
+	# the School-Temple lies past the Naga shrine, gate facing the shrine
+	temple_center = shrine_center + dir * 52.0
+	temple_center = temple_center.clamp(Vector2(-Cfg.WORLD + 34, -Cfg.WORLD + 34), Vector2(Cfg.WORLD - 34, Cfg.WORLD - 34))
+	var temple_gate := temple_center + (shrine_center - temple_center).normalized() * 23.0
 	obelisk_pos = desert_center + Vector2(-8, -34)
 	buried_temple = desert_center + Vector2(30, 18)
 	terrain.generate([
 		{"center": Vector2.ZERO, "radius": 9.0}, {"center": temple, "radius": Cfg.RUINS_RADIUS + 3.0},
 		{"center": shrine_center, "radius": 7.0}, {"center": gothic_center, "radius": 18.0},
-		{"center": obelisk_pos, "radius": 6.0}, {"center": buried_temple, "radius": 11.0}],
-		[trail + [shrine_center], old_trail, lamp_road, waystone_path, north_road])
+		{"center": obelisk_pos, "radius": 6.0}, {"center": buried_temple, "radius": 11.0},
+		{"center": temple_center, "radius": 25.0}],
+		[trail + [shrine_center], old_trail, lamp_road, waystone_path, north_road, [shrine_center, temple_gate]])
 
 	# flowered south (the start, kept as it was)
 	_build_clearing(dir)
 	_build_trail(trail + [shrine_center], true)
 	_build_trail(old_trail, false)
 	_build_shrine(shrine_center, dir)
+	_build_school_temple(temple_center, shrine_center)
 	_build_temple(temple)
 	_build_forest()
 	# gothic north-west and magic desert north-east
@@ -774,6 +799,8 @@ func _good_spot(p: Vector3, biome: String, trail_gap := 3.0) -> bool:
 	if terrain.biome_at(p.x, p.z) != biome or not terrain.is_walkable(p.x, p.z) or terrain.is_water(p.x, p.z):
 		return false
 	if terrain.slope(p.x, p.z) > 0.9 or terrain.on_trail(p.x, p.z, trail_gap):
+		return false
+	if Vector2(p.x, p.z).distance_to(temple_center) < 25.0:
 		return false
 	return true
 
@@ -909,6 +936,106 @@ func _build_temple(t: Vector2) -> void:
 	portal = PortalScene.instantiate()
 	portal.position = center
 	decor_root.add_child(portal)
+
+
+## The School-Temple: build it, scatter its loot, wake its guardian.
+func _build_school_temple(c: Vector2, face_to: Vector2) -> void:
+	var center := terrain.on_ground(Vector3(c.x, 0, c.y))
+	var to_gate := (face_to - c).normalized()
+	temple_info = SchoolTemple.build(self, center, atan2(to_gate.x, to_gate.y))
+	var spots: Array = temple_info.loot.duplicate()
+	var loot: Dictionary = Data.dungeon("temple").get("loot", {})
+	for kind in loot:
+		for i in range(int(loot[kind])):
+			if spots.is_empty():
+				break
+			var at: Vector3 = spots.pop_front()
+			if Data.resource(kind).is_empty():
+				spawn_item(kind, 1, at)    # loose items (flint, essence, elixir)
+			else:
+				_spawn_resource(kind, at)  # mushrooms, berry bushes
+	_spawn_guardian("temple")
+
+
+func _spawn_guardian(id: String) -> void:
+	var g = GuardianScript.new()
+	g.setup(id, temple_info.arena)
+	g.position = temple_info.arena
+	guardians_root.add_child(g)
+
+
+func guardians() -> Array:
+	return _children(guardians_root) if guardians_root != null else []
+
+
+## A guardian under attack, near `pos` (alive only), or null.
+func guardian_near(pos: Vector3, reach: float):
+	for g in guardians():
+		if g.alive() and _hdist(g.position, pos) <= reach:
+			return g
+	return null
+
+
+func guardian_woke(g) -> void:
+	_announce("%s desperta! Marcas vermelhas no chão = golpe vindo: saia delas (anel: salte)." % g.display_name())
+	discover("guardian")
+
+
+func guardian_reset(g) -> void:
+	_announce("%s voltou a dormir e se curou." % g.display_name())
+
+
+func guardian_hit_player(g, p, attack: String) -> void:
+	_say(p, "%s acertou: %s" % [g.display_name(), "golpe de cauda" if attack == "sweep" else "cuspe de jade"])
+
+
+func _damage_guardian(p, g, amount: float) -> void:
+	g.take_hit(amount)
+	_pop(g.position + Vector3(0, 2.6, 0), "-%d" % int(amount), Color(1.0, 0.85, 0.4))
+	if not g.alive():
+		_on_guardian_defeated(g)
+
+
+func _on_guardian_defeated(g) -> void:
+	var id: String = g.dungeon_id
+	dungeons[id]["cleared"] = true
+	_open_seal()
+	# the reward appears ONCE, as a normal item: saving/loading never duplicates it
+	spawn_item(String(Data.dungeon(id).get("reward", "essence")), 1, temple_info.reward)
+	_announce("%s foi vencida! O selo de jade se abriu: a recompensa está no santuário." % g.display_name())
+	Fx.magic_puff(decor_root, g.position, Color(0.4, 1.0, 0.6), 40)
+	_despawn(g)
+
+
+func _open_seal() -> void:
+	var seal = temple_info.get("seal")
+	if seal != null and is_instance_valid(seal):
+		seal.visible = false
+
+
+## After loading: a cleared place stays cleared (no guardian, seal open).
+func _sync_dungeons() -> void:
+	if dungeons.get("temple", {}).get("cleared", false):
+		_open_seal()
+		for g in guardians():
+			_despawn(g)
+
+
+func _tick_dungeons(delta: float) -> void:
+	var info: Dictionary = dungeons.get("temple", {})
+	if local_player != null and not info.get("discovered", false) and not temple_info.is_empty():
+		if _hdist(local_player.position, temple_info.arena) < float(Data.dungeon("temple").get("discover_radius", 24)):
+			info["discovered"] = true
+			exploration.reveal(temple_info.arena, 26.0)
+			_announce("Descoberto: %s" % Data.dungeon("temple").get("name", ""))
+	for g in guardians():
+		g.tick(delta, self)
+	if local_player != null:
+		var g2 = null
+		for g in guardians():
+			if g.awake() and _hdist(g.position, local_player.position) < 22.0:
+				g2 = g
+		hud.set_boss(g2.display_name() if g2 != null else "", g2.hp if g2 != null else 0.0, g2.hp_max if g2 != null else 1.0)
 
 
 ## Woods, not noise: clusters of trees with undergrowth, a few lone trees,
@@ -1187,6 +1314,7 @@ func tick(delta: float) -> void:
 		if randf() < rate * delta:
 			spawn_shadow()
 
+	_tick_dungeons(delta)
 	for s in shadows():
 		s.tick(delta, self, lit, day_night.t)
 		if s.hp <= 0.0:
@@ -1344,6 +1472,30 @@ func _stage_scene(scene: String) -> void:
 		"camp":
 			give(p, {"grass": 6, "log": 4, "rock": 6, "flint": 4, "twig": 6})
 			craft(p, "campfire")
+		"temple", "naga", "naga-spit", "temple-map":
+			# the School-Temple: gate view · the guardian telegraphing · the map
+			var arena: Vector3 = temple_info.arena
+			var gate: Vector3 = temple_info.gate
+			var inward := (arena - gate).normalized()
+			if scene == "temple":
+				p.position = terrain.on_ground(gate - inward * 4.0)
+				camera_rig.zoom = 1.45
+			else:
+				p.position = terrain.on_ground(arena + inward * -4.5)
+				camera_rig.zoom = 1.2
+			camera_rig.angle = atan2(-inward.x, -inward.z)
+			camera_rig._snapped = false
+			_tick_dungeons(0.1)
+			if scene == "naga" or scene == "naga-spit":
+				var g = guardians()[0]
+				g.tick(0.1, self)
+				g._set_state("chase", 0.0)
+				g.take_hit(70.0)
+				g._start("sweep" if scene == "naga" else "spit", 30.0, p.position - g.position)
+			if scene == "temple-map":
+				_damage_guardian(p, guardians()[0], 9999.0)
+				exploration.reveal(p.position, 40.0)
+				toggle_map()
 		"gather", "nogear":
 			# the interaction prompt over the nearest straw / tree, a gain pop-up
 			# and the Light tab with live ingredient counts
@@ -1415,6 +1567,10 @@ func map_landmarks() -> Array:
 		{"name": "Grande Obelisco", "pos": Vector3(obelisk_pos.x, 0, obelisk_pos.y), "color": Color(0.4, 0.9, 1.0)},
 		{"name": "Templo Soterrado", "pos": Vector3(buried_temple.x, 0, buried_temple.y), "color": Color(0.9, 0.7, 0.4)},
 	]
+	var temple: Dictionary = dungeons.get("temple", {})
+	if temple.get("discovered", false) and not temple_info.is_empty():
+		out.append({"name": Data.dungeon("temple").get("name", ""), "pos": temple_info.arena, "color": Color(0.35, 1.0, 0.55),
+			"status": "cleared" if temple.get("cleared", false) else "explored"})
 	for l in terrain.lakes.filter(func(x): return x.get("biome", "") == "desert"):
 		out.append({"name": "Oásis", "pos": Vector3(l.center.x, 0, l.center.y), "color": Color(0.3, 0.7, 1.0)})
 	return out
@@ -1535,10 +1691,37 @@ func resolve_collision(pos: Vector3, radius := 0.45) -> Vector3:
 			p2 = _push_out(p2, Vector2(d.global_position.x, d.global_position.z), float(d.get_meta("solid")) + radius)
 		elif d.has_meta("ruin") and d is Node3D and not d.has_meta("solid"):
 			p2 = _push_out(p2, Vector2(d.position.x, d.position.z), 0.8 + radius)
+	for b in _solid_boxes:
+		if b.node != null and (not is_instance_valid(b.node) or not b.node.visible):
+			continue  # an opened seal no longer blocks
+		p2 = _push_out_box(p2, b.c, b.rot, b.half, radius)
 	if portal != null:
 		for side in [-2.0, 2.0]:  # the two arch posts; walk through the middle
 			p2 = _push_out(p2, Vector2(portal.position.x + side, portal.position.z), 0.6 + radius)
 	return Vector3(p2.x, pos.y, p2.y)
+
+
+## Registers a rotated box collider (walls, pillars) at a world position.
+## `node` (optional): the collider only blocks while that node is visible.
+func add_solid_box(at: Vector3, half: Vector2, rot: float, node: Node3D = null) -> void:
+	_solid_boxes.append({"c": Vector2(at.x, at.z), "half": half, "rot": rot, "node": node})
+
+
+## Pushes a circle (radius) out of a box rotated `rot` around Y.
+static func _push_out_box(p: Vector2, c: Vector2, rot: float, half: Vector2, radius: float) -> Vector2:
+	var local := (p - c).rotated(rot)   # world (x, z) -> box space
+	var q := Vector2(clampf(local.x, -half.x, half.x), clampf(local.y, -half.y, half.y))
+	var diff := local - q
+	var dist := diff.length()
+	if dist >= radius:
+		return p
+	if dist > 0.0001:
+		local = q + diff / dist * radius
+	elif half.x - absf(local.x) < half.y - absf(local.y):  # inside: leave by the shallowest side
+		local.x = signf(local.x if local.x != 0.0 else 1.0) * (half.x + radius)
+	else:
+		local.y = signf(local.y if local.y != 0.0 else 1.0) * (half.y + radius)
+	return c + local.rotated(-rot)
 
 
 func _push_out(p: Vector2, center: Vector2, min_dist: float) -> Vector2:
@@ -1730,8 +1913,23 @@ func interact_prompt(g) -> String:
 	return text
 
 
+## E next to a guardian: a blow (tools hit harder, Thorne twice as hard).
+func _strike_guardian(p, g) -> void:
+	p.face(g.position)
+	p.play_action("chop")
+	var dmg := float(Data.dungeon(g.dungeon_id).get("guardian", {}).get("melee_damage", 10)) * float(p.perk("strike_power"))
+	if p.inventory.hand_data().has("tool"):
+		dmg *= 1.5
+	_sfx(p, "thud")
+	_damage_guardian(p, g, dmg)
+
+
 func _interact(p) -> void:
-	# E: pick, chop (axe), mine (pickaxe), grab loot, or touch the Portal
+	# E: strike a guardian, pick, chop (axe), mine (pickaxe), grab loot, or touch the Portal
+	var foe = guardian_near(p.position, 2.8)
+	if foe != null:
+		_strike_guardian(p, foe)
+		return
 	var best = interact_target(p)
 	var bd: float = _hdist(p.position, best.position) if best != null else Cfg.FOCUS_RADIUS
 	if portal != null:
@@ -1863,7 +2061,7 @@ func _update_focus() -> void:
 	if local_player != null and not local_player.dead and not map_open() and placing == "":
 		g = interact_target(local_player)
 	_focus_ring.visible = g != null
-	_focus_label.visible = g != null
+	_focus_label.visible = false  # the HUD prompt carries the text (no duplicate)
 	if g == null:
 		hud.set_prompt("", true)
 		return
@@ -1872,9 +2070,6 @@ func _update_focus() -> void:
 	_focus_ring.position = g.position + Vector3(0, 0.08, 0)
 	_focus_ring.scale = Vector3.ONE * (1.8 if big else 1.0)
 	(_focus_ring.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.85, 0.4) if why == "" else Color(1.0, 0.45, 0.35)
-	_focus_label.position = g.position + Vector3(0, 4.6 if big else 1.9, 0)
-	_focus_label.text = interact_prompt(g) if why == "" else "✕ " + why.get_slice(" (", 0).get_slice(":", 0)  # full reason: HUD prompt
-	_focus_label.modulate = Color(1.0, 0.95, 0.8) if why == "" else Color(1.0, 0.6, 0.5)
 	hud.set_prompt(interact_prompt(g) if why == "" else "%s: %s" % [g.display_name(), why], why == "")
 
 
@@ -1928,6 +2123,16 @@ func _cast_bolt(p) -> void:
 		if broke != "":
 			p.refresh_gear()
 			_say(p, "%s se partiu!" % Data.item_name(broke))
+	var gd = null
+	for g in guardians():
+		if g.alive() and g.position.distance_to(p.position) < bd:
+			bd = g.position.distance_to(p.position)
+			gd = g
+	if gd != null:
+		p.face(gd.position)
+		p.play_action("bolt")
+		_damage_guardian(p, gd, p.spell_damage())
+		return
 	if best == null:
 		p.play_action("bolt")
 		_say(p, "Feitiço lançado no vazio")
@@ -1956,6 +2161,9 @@ func _cast_lume(p) -> void:
 			s.hp -= float(lume.damage) * p.perk("bolt_mult")
 			s.last_hitter = p
 			burned += 1
+	for g in guardians():
+		if g.alive() and g.position.distance_to(p.position) < float(lume.radius):
+			_damage_guardian(p, g, float(lume.damage) * p.perk("bolt_mult"))
 	p.wisp = minf(100.0, p.wisp + 10.0)
 	p.play_action("lume")
 	_say(p, "LUME! Luz explode (%d Errantes queimados)" % burned)

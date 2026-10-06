@@ -47,6 +47,7 @@ static func snapshot(w) -> Dictionary:
 		"objective_step": w.objective_step,
 		"exploration": w.exploration.to_save() if w.exploration != null else {},
 		"obj_flags": w.obj_flags,
+		"dungeons": w.dungeons,
 		"player": {"pos": _v(p.position), "health": p.health, "hunger": p.hunger, "mana": p.mana,
 			"corruption": p.corruption, "wisp": p.wisp, "noise": p.noise,
 			"slots": p.inventory.slots, "equip": p.inventory.equip},
