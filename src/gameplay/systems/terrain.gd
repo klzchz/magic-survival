@@ -15,16 +15,18 @@ const GROUND_SHADER := preload("res://assets/shaders/ground.gdshader")
 const WATER_SHADER := preload("res://assets/shaders/water.gdshader")
 const GRASS_SHADER := preload("res://assets/shaders/grass.gdshader")
 
-const GRASS_GREEN := Color(0.24, 0.40, 0.15)
-const GRASS_DRY := Color(0.46, 0.40, 0.18)
-const MUD := Color(0.30, 0.24, 0.16)
-const SAND := Color(0.55, 0.48, 0.32)
-const ROCK := Color(0.36, 0.35, 0.36)
+const GRASS_GREEN := Color(0.30, 0.52, 0.18)
+const GRASS_DRY := Color(0.52, 0.55, 0.22)
+const MUD := Color(0.36, 0.27, 0.17)
+const SAND := Color(0.62, 0.52, 0.34)
+const ROCK := Color(0.42, 0.42, 0.40)
+const TRAIL := Color(0.55, 0.42, 0.27)
 
 var cfg := {}
 var water_level := -0.6
 var lakes: Array = []        # [{center: Vector2, radius, depth}]
 var clearings: Array = []    # [{center: Vector2, radius}] kept flat at height 0
+var paths: Array = []        # polylines (Array[Vector2]): trails painted and smoothed
 var _relief := FastNoiseLite.new()
 var _detail := FastNoiseLite.new()
 var _tint := FastNoiseLite.new()
@@ -46,8 +48,9 @@ func _c(key: String, default: float) -> float:
 
 ## New island: reseeds the noise, places lakes away from the given clearings
 ## (spawn, ruins) and rebuilds every mesh.
-func generate(clearing_list: Array) -> void:
+func generate(clearing_list: Array, path_list: Array = []) -> void:
 	clearings = clearing_list
+	paths = path_list
 	_relief.seed = randi()
 	_relief.frequency = _c("frequency", 0.022)
 	_relief.fractal_octaves = 3
@@ -63,6 +66,9 @@ func generate(clearing_list: Array) -> void:
 		var r := randf_range(float(radius_range[0]), float(radius_range[1]))
 		var c := Vector2(randf_range(-Cfg.WORLD + r + 4, Cfg.WORLD - r - 4), randf_range(-Cfg.WORLD + r + 4, Cfg.WORLD - r - 4))
 		var ok := true
+		for path in paths:
+			if path_distance(c, path) < r + 6.0:
+				ok = false
 		for cl in clearings:
 			if c.distance_to(cl.center) < cl.radius + r + 8.0:
 				ok = false
@@ -74,10 +80,32 @@ func generate(clearing_list: Array) -> void:
 	_rebuild()
 
 
+## Distance from a point to a polyline trail.
+static func path_distance(p: Vector2, path: Array) -> float:
+	var best := INF
+	for i in range(path.size() - 1):
+		var a: Vector2 = path[i]
+		var b: Vector2 = path[i + 1]
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.0001), 0.0, 1.0)
+		best = minf(best, p.distance_to(a + ab * t))
+	return best
+
+
+func on_trail(x: float, z: float, extra := 0.0) -> bool:
+	for path in paths:
+		if path_distance(Vector2(x, z), path) < _c("path_width", 2.2) + extra:
+			return true
+	return false
+
+
 ## Ground height at a world XZ point (analytic, cheap: safe to call per frame).
 func height_at(x: float, z: float) -> float:
 	var p := Vector2(x, z)
 	var h := _relief.get_noise_2d(x, z) * _c("amplitude", 3.2) + _detail.get_noise_2d(x, z) * _c("detail_amplitude", 0.5)
+	for path in paths:  # trails smooth the relief so walking them feels easy
+		var dp := path_distance(p, path)
+		h *= lerpf(0.3, 1.0, smoothstep(2.0, 9.0, dp))
 	for cl in clearings:  # flat clearings blend smoothly into the relief
 		var d: float = p.distance_to(cl.center)
 		h = lerpf(0.0, h, smoothstep(cl.radius, cl.radius + 9.0, d))
@@ -138,7 +166,11 @@ func _ground_color(x: float, z: float, h: float, slope: float) -> Color:
 	var shore := 1.0 - smoothstep(water_level + 0.05, water_level + 0.7, h)
 	c = c.lerp(SAND if t > 0.5 else MUD, shore)
 	c = c.lerp(MUD.darkened(0.3), 1.0 - smoothstep(water_level - 1.2, water_level, h))  # lake bed
-	return c.lerp(ROCK, smoothstep(0.55, 0.9, slope))
+	c = c.lerp(ROCK, smoothstep(0.55, 0.9, slope))
+	for path in paths:  # packed-earth trail with soft edges
+		var dp := path_distance(Vector2(x, z), path)
+		c = c.lerp(TRAIL.lerp(MUD, t * 0.4), 1.0 - smoothstep(_c("path_width", 2.2) * 0.55, _c("path_width", 2.2), dp))
+	return c
 
 
 func _build_ground() -> void:
@@ -240,43 +272,52 @@ func _blade_mesh() -> ArrayMesh:
 	return m
 
 
+func _mesh_of(id: String) -> Mesh:
+	var n := Models.spawn(self, id)
+	if n == null:
+		return null
+	var mi := n.find_children("*", "MeshInstance3D", true, false)
+	var mesh: Mesh = (mi[0] as MeshInstance3D).mesh if mi.size() > 0 else null
+	remove_child(n)
+	n.queue_free()
+	return mesh
+
+
+## Stylized grass tufts (MegaKit meshes) in clumps: dense in meadows, thin on
+## trails and in the clearings, none in the water.
 func _build_grass() -> void:
-	var mat := ShaderMaterial.new()
-	mat.shader = GRASS_SHADER
-	var blade := _blade_mesh()
-	blade.surface_set_material(0, mat)
-	var count := int(_c("grass_blades", 9000))
-	var xforms: Array = []
-	var cols: Array = []
-	var tries := 0
-	while xforms.size() < count and tries < count * 3:
-		tries += 1
-		# clumps: pick a centre, scatter a few blades around it
-		var cx := randf_range(-Cfg.WORLD, Cfg.WORLD)
-		var cz := randf_range(-Cfg.WORLD, Cfg.WORLD)
-		var dry := _tint.get_noise_2d(cx, cz) * 0.5 + 0.5
-		for k in range(6):
-			var x := cx + randf_range(-0.6, 0.6)
-			var z := cz + randf_range(-0.6, 0.6)
-			var h := height_at(x, z)
-			if h < water_level + 0.15:
+	for spec in [["qn_grass_short", int(_c("grass_short", 3200)), 0.45, 0.8], ["qn_grass_wispy", int(_c("grass_wispy", 900)), 0.35, 0.6]]:
+		var mesh := _mesh_of(spec[0])
+		if mesh == null:
+			continue
+		var xforms: Array = []
+		var tries := 0
+		while xforms.size() < spec[1] and tries < spec[1] * 4:
+			tries += 1
+			var cx := randf_range(-Cfg.WORLD, Cfg.WORLD)
+			var cz := randf_range(-Cfg.WORLD, Cfg.WORLD)
+			var dens := _tint.get_noise_2d(cx * 0.7, cz * 0.7) * 0.5 + 0.5
+			if randf() > dens + 0.25 or on_trail(cx, cz, 0.3):
 				continue
-			var b := Basis(Vector3.UP, randf() * TAU).scaled(Vector3.ONE * randf_range(0.7, 1.5))
-			xforms.append(Transform3D(b, Vector3(x, h - 0.02, z)))
-			cols.append(Color(0.36, 0.56, 0.2).lerp(Color(0.68, 0.6, 0.26), clampf(dry + randf_range(-0.2, 0.2), 0.0, 1.0)))
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = blade
-	mm.instance_count = xforms.size()
-	for i in range(xforms.size()):
-		mm.set_instance_transform(i, xforms[i])
-		mm.set_instance_color(i, cols[i])
-	var grass := MultiMeshInstance3D.new()
-	grass.multimesh = mm
-	grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	grass.name = "Grass"
-	_built.add_child(grass)
+			for k in range(3):
+				var x := cx + randf_range(-0.8, 0.8)
+				var z := cz + randf_range(-0.8, 0.8)
+				var h := height_at(x, z)
+				if h < water_level + 0.15:
+					continue
+				var b := Basis(Vector3.UP, randf() * TAU).scaled(Vector3.ONE * randf_range(spec[2], spec[3]))
+				xforms.append(Transform3D(b, Vector3(x, h - 0.02, z)))
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = mesh
+		mm.instance_count = xforms.size()
+		for i in range(xforms.size()):
+			mm.set_instance_transform(i, xforms[i])
+		var grass := MultiMeshInstance3D.new()
+		grass.multimesh = mm
+		grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		grass.name = "Grass" if spec[0] == "qn_grass_short" else "GrassWispy"
+		_built.add_child(grass)
 
 
 ## Lily pads on the water, reeds and plants along the shore.

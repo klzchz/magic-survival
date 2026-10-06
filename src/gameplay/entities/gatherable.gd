@@ -62,36 +62,32 @@ func _ready() -> void:
 		"grass_tuft":
 			visual = Node3D.new()
 			add_child(visual)
-			Art.add_mesh(visual, Art.cylinder(0.25, 0.35, 0.15), Art.mat(Color(0.35, 0.3, 0.15)), Vector3(0, 0.07, 0))
-			_fruit = Node3D.new()
-			visual.add_child(_fruit)
-			var blade := Art.mat(Color(0.6, 0.66, 0.25))
-			for i in range(9):
-				var b := Art.add_mesh(_fruit, Art.box(Vector3(0.06, 1.0, 0.06)), blade, Vector3(randf_range(-0.2, 0.2), 0.5, randf_range(-0.2, 0.2)))
-				b.rotation = Vector3(randf_range(-0.3, 0.3), 0, randf_range(-0.3, 0.3))
+			Art.add_mesh(visual, Art.cylinder(0.3, 0.4, 0.1), Art.mat(Color(0.4, 0.33, 0.18)), Vector3(0, 0.05, 0))
+			_fruit = Models.spawn(visual, "qn_grass_wispy", Vector3.ZERO, 0.95)
+			if _fruit == null:
+				_fruit = Node3D.new()
+				visual.add_child(_fruit)
+				Art.add_mesh(_fruit, Art.box(Vector3(0.06, 1.0, 0.06)), Art.mat(Color(0.6, 0.66, 0.25)), Vector3(0, 0.5, 0))
 		"sapling":
 			visual = Node3D.new()
 			add_child(visual)
-			var bark := Art.mat(Color(0.42, 0.3, 0.18))
-			Art.add_mesh(visual, Art.cylinder(0.05, 0.08, 0.5), bark, Vector3(0, 0.25, 0))
-			_fruit = Node3D.new()
-			visual.add_child(_fruit)
-			Art.add_mesh(_fruit, Art.cylinder(0.03, 0.05, 1.2), bark, Vector3(0, 0.9, 0))
-			for i in range(4):
-				var tw := Art.add_mesh(_fruit, Art.cylinder(0.02, 0.03, 0.6), bark, Vector3(0, 0.8 + i * 0.2, 0))
-				tw.rotation = Vector3(0.9, i * 1.6, 0)
-			Art.add_mesh(_fruit, Art.sphere(0.25, 0.4), Art.mat(Color(0.75, 0.45, 0.15)), Vector3(0, 1.55, 0))
+			Art.add_mesh(visual, Art.cylinder(0.05, 0.08, 0.4), Art.mat(Color(0.42, 0.3, 0.18)), Vector3(0, 0.2, 0))
+			_fruit = Models.spawn(visual, ["qn_tree_1", "qn_tree_2", "qn_tree_4"].pick_random(), Vector3.ZERO, 0.22)
+			if _fruit == null:
+				_fruit = Node3D.new()
+				visual.add_child(_fruit)
+				Art.add_mesh(_fruit, Art.cylinder(0.03, 0.05, 1.2), Art.mat(Color(0.42, 0.3, 0.18)), Vector3(0, 0.9, 0))
 		"berry_bush":
 			visual = Node3D.new()
 			add_child(visual)
-			Art.add_mesh(visual, Art.sphere(0.75, 1.1), Art.mat(Color(0.18, 0.32, 0.14)), Vector3(0, 0.5, 0))
-			Art.add_mesh(visual, Art.sphere(0.5, 0.8), Art.mat(Color(0.22, 0.38, 0.16)), Vector3(0.4, 0.45, 0.2))
+			if Models.spawn(visual, "qn_bush", Vector3.ZERO, 0.75) == null:
+				Art.add_mesh(visual, Art.sphere(0.75, 1.1), Art.mat(Color(0.18, 0.32, 0.14)), Vector3(0, 0.5, 0))
 			_fruit = Node3D.new()
 			visual.add_child(_fruit)
 			var red := Art.emissive(Color(0.85, 0.1, 0.2), Color(0.35, 0.0, 0.05))
-			for i in range(8):
+			for i in range(10):
 				var a := randf() * TAU
-				Art.add_mesh(_fruit, Art.sphere(0.08, 0.16), red, Vector3(cos(a) * 0.62, randf_range(0.35, 0.9), sin(a) * 0.62))
+				Art.add_mesh(_fruit, Art.sphere(0.09, 0.18), red, Vector3(cos(a) * 0.7, randf_range(0.4, 1.0), sin(a) * 0.7))
 		"item":
 			visual = ItemArt.build(self, Data.item(item_id).get("icon", item_id))
 			visual.scale = Vector3.ONE * 0.9
@@ -111,7 +107,7 @@ func _ready() -> void:
 				Art.add_mesh(visual, Art.cylinder(0.3, 0.42, 3.0), Art.mat(Color(0.34, 0.24, 0.16)), Vector3(0, 1.5, 0))
 				Art.add_mesh(visual, Art.sphere(1.7, 3.4), Art.mat(Color(0.11, 0.30, 0.15)), Vector3(0, 3.6, 0))
 		"rock":
-			visual = Models.spawn_variant(self, "rock", Vector3.ZERO, 1.6)
+			visual = Models.spawn_variant(self, "rock", Vector3.ZERO, 1.0)
 			if visual == null:
 				visual = Art.add_mesh(self, Art.sphere(0.75, 1.0), Art.mat(Color(0.45, 0.46, 0.50)), Vector3(0, 0.35, 0))
 	set_process(kind == "page" or kind == "item")

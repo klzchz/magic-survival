@@ -13,6 +13,7 @@ const Fx = preload("res://src/core/fx.gd")
 const Data = preload("res://src/core/data.gd")
 const Dev = preload("res://src/core/dev.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
+const Lanna = preload("res://src/core/lanna.gd")
 const SOLID := {"tree": 0.8, "rock": 0.85, "berry_bush": 0.6}   # collision radius per resource kind
 const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
 const MetaSave = preload("res://src/core/meta_save.gd")
@@ -51,6 +52,9 @@ var portal = null
 var started := false
 var run_hearts := 0        # Mist Hearts of THIS run (records/spells stay permanent)
 var world_seed := 0        # rebuilds the same island on Continue
+var shrine_center := Vector2.ZERO   # Shrine of the Sleeping Naga (end of the Lantern Trail)
+var trail: Array = []               # Lantern Trail polyline (clearing -> shrine)
+var old_trail: Array = []           # old trail to the Temple of the Portal
 var placing := ""          # structure recipe being placed (preview mode)
 var place_ok := false
 var place_why := ""
@@ -553,67 +557,188 @@ func _generate_world(seed_value := -1) -> void:
 		for n in root.get_children():
 			_despawn(n)
 	portal = null
+
+	# ---- layout: clearing -> Lantern Trail -> shrine; old trail -> temple ----
 	var rc := _ruins_center()
-	terrain.generate([{"center": Vector2.ZERO, "radius": 9.0}, {"center": Vector2(rc.x, rc.z), "radius": Cfg.RUINS_RADIUS + 3.0}])
+	var ang := randf_range(-0.25, 1.8)            # the shrine lies away from the temple
+	var dir := Vector2(cos(ang), sin(ang))
+	shrine_center = dir * 32.0
+	var side := Vector2(-dir.y, dir.x)
+	trail = [dir * 6.0, dir * 16.0 + side * randf_range(-5.0, 5.0), dir * 26.0]
+	var temple := Vector2(rc.x, rc.z)
+	var to_t := (temple - Vector2.ZERO).normalized()
+	var t_side := Vector2(-to_t.y, to_t.x)
+	old_trail = [to_t * 6.0, to_t * 22.0 + t_side * 6.0, to_t * 42.0 - t_side * 4.0, temple - to_t * (Cfg.RUINS_RADIUS + 1.0)]
+	terrain.generate([{"center": Vector2.ZERO, "radius": 9.0}, {"center": temple, "radius": Cfg.RUINS_RADIUS + 3.0},
+		{"center": shrine_center, "radius": 7.0}], [trail + [shrine_center], old_trail])
 
-	for i in range(48):
-		var pos := _rand_pos()
-		if pos.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS + 4.0:
-			continue  # keep the ruins clearing open
-		_spawn_resource("tree", pos)
-	for i in range(20):
-		_spawn_resource("rock", _rand_pos())
-	for i in range(30):
-		_spawn_resource("mushroom", _rand_pos())
-	for i in range(45):
-		_spawn_resource("grass_tuft", _rand_pos())
-	for i in range(35):
-		_spawn_resource("sapling", _rand_pos())
-	for i in range(18):
-		_spawn_resource("berry_bush", _rand_pos())
-	for i in range(26):  # flint lies on the ground: the first axe needs it
-		spawn_item("flint", 1, _rand_pos())
-	# a starter kit near the spawn so the first minutes teach the loop
-	for k in [["grass_tuft", Vector3(4, 0, 2)], ["grass_tuft", Vector3(5, 0, -1)], ["sapling", Vector3(-4, 0, 3)],
-			["sapling", Vector3(-3, 0, -4)], ["berry_bush", Vector3(2, 0, 6)]]:
-		_spawn_resource(k[0], k[1])
-	spawn_item("flint", 1, Vector3(-2, 0, 5))
-	spawn_item("flint", 1, Vector3(3, 0, -5))
+	_build_clearing(dir)
+	_build_trail(trail + [shrine_center], true)
+	_build_trail(old_trail, false)
+	_build_shrine(shrine_center, dir)
+	_build_temple(temple)
+	_build_forest()
 
-	# Ruins of the Fallen College: broken pillars, graves, candles, a crypt
-	var pillar_mat := Art.mat(Color(0.55, 0.53, 0.58))
 	for i in range(16):
-		var piece := Models.spawn_variant(decor_root, "ruin", _ruins_pos())
-		if piece == null:
-			piece = Art.add_mesh(decor_root, Art.cylinder(0.5, 0.6, 4.0), pillar_mat, _ruins_pos() + Vector3(0, 2.0, 0))
-			piece.rotation_degrees.z = randf_range(-14.0, 14.0)
-		piece.set_meta("ruin", true)
-	var crypt := Models.spawn(decor_root, "crypt", terrain.on_ground(_ruins_center() + Vector3(-9.0, 0, -9.0)))
-	if crypt != null:
-		crypt.rotation.y = PI * 0.25
-		crypt.set_meta("ruin", true)
-	for i in range(6):
-		var c := Models.spawn_variant(decor_root, "ruin", _ruins_pos()) if i > 3 else Models.spawn(decor_root, ["candles", "skull_candle", "lantern"].pick_random(), _ruins_pos())
-		if c != null and i <= 3:
-			Art.add_light(c, Color(1.0, 0.7, 0.35), 4.0, 0.9, Vector3(0, 1.0, 0))
-
-	# litter across the island: pumpkins, bones, grave markers, small hills
-	for i in range(60):
-		var pos := _rand_pos()
-		if pos.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS or pos.length() < 5.0:
-			continue
-		Models.spawn_variant(decor_root, "litter", pos)
-	for i in range(5):
-		var jack := Models.spawn(decor_root, "jackolantern", _rand_pos())
-		if jack != null:
-			Art.add_light(jack, Color(1.0, 0.55, 0.15), 5.0, 1.1, Vector3(0, 0.8, 0))
-	for i in range(3):
-		_spawn_resource("page", _ruins_pos())
-	portal = PortalScene.instantiate()
-	portal.position = terrain.on_ground(_ruins_center())
-	decor_root.add_child(portal)
+		_spawn_resource("rock", _wild_pos(4.0))
+	for i in range(22):
+		_spawn_resource("mushroom", _wild_pos(3.0))
+	for i in range(40):
+		_spawn_resource("grass_tuft", _wild_pos(3.0))
+	for i in range(30):
+		_spawn_resource("sapling", _wild_pos(3.0))
+	for i in range(16):
+		_spawn_resource("berry_bush", _wild_pos(3.5))
+	for i in range(22):  # flint lies on the ground: the first axe needs it
+		spawn_item("flint", 1, _wild_pos(2.0))
+	for i in range(70):  # meadow flowers, clover and pebbles
+		Models.spawn_variant(decor_root, "meadow", _wild_pos(1.5), randf_range(0.8, 1.2))
 	randomize()  # gameplay randomness stays unpredictable
 
+
+## A random dry spot that keeps trails, clearings and landmarks readable.
+func _wild_pos(trail_gap := 3.0) -> Vector3:
+	for _i in range(30):
+		var p := _rand_pos()
+		if terrain.on_trail(p.x, p.z, trail_gap) or p.length() < 9.0:
+			continue
+		if Vector2(p.x, p.z).distance_to(shrine_center) < 8.0 or p.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS + 2.0:
+			continue
+		return p
+	return _rand_pos()
+
+
+func _solid(node: Node3D, radius: float) -> void:
+	node.set_meta("solid", radius)
+
+
+## The apprentice's clearing: a lantern landmark, a log seat, ferns framing
+## the way out to the Lantern Trail, and a starter kit to learn the loop.
+func _build_clearing(dir: Vector2) -> void:
+	_solid(Lanna.lantern_post(decor_root, terrain.on_ground(Vector3(-2.5, 0, -2.5))).get_parent(), 0.4)
+	var seat := Models.spawn(decor_root, "log_m", terrain.on_ground(Vector3(-3.5, 0, 0.5)), 1.6)
+	if seat != null:
+		seat.rotation.y = 0.6
+	for i in range(18):  # fern ring, open toward the trail
+		var a := TAU * i / 18.0
+		var v := Vector2(cos(a), sin(a))
+		if v.dot(dir) > 0.8:
+			continue
+		var r := randf_range(8.5, 10.5)
+		Models.spawn_variant(decor_root, "undergrowth", terrain.on_ground(Vector3(v.x * r, 0, v.y * r)), randf_range(0.8, 1.2))
+	for k in [["grass_tuft", Vector3(4, 0, 2)], ["grass_tuft", Vector3(5, 0, -1)], ["grass_tuft", Vector3(-1, 0, 5)],
+			["sapling", Vector3(-4, 0, 3)], ["sapling", Vector3(-3, 0, -5)], ["berry_bush", Vector3(2, 0, 6)]]:
+		_spawn_resource(k[0], k[1])
+	spawn_item("flint", 1, Vector3(-2, 0, 4))
+	spawn_item("flint", 1, Vector3(3, 0, -4))
+
+
+## Stepping stones along a trail; the Lantern Trail also gets lantern posts
+## and bamboo groves on alternating sides (wayfinding at night).
+func _build_trail(points: Array, lanterns: bool) -> void:
+	var walked := 0.0
+	var next_lantern := 6.0
+	var flip := 1.0
+	for i in range(points.size() - 1):
+		var a: Vector2 = points[i]
+		var b: Vector2 = points[i + 1]
+		var seg := b - a
+		var n := Vector2(-seg.y, seg.x).normalized()
+		var d := 0.0
+		while d < seg.length():
+			var p := a + seg.normalized() * d + n * randf_range(-0.5, 0.5)
+			var st := Models.spawn_variant(decor_root, "stepping_stone", terrain.on_ground(Vector3(p.x, 0, p.y)), randf_range(0.8, 1.1))
+			if st != null:
+				st.position.y += 0.02
+			if lanterns and walked + d >= next_lantern:
+				var lp := terrain.on_ground(Vector3(p.x + n.x * 2.6 * flip, 0, p.y + n.y * 2.6 * flip))
+				_solid(Lanna.lantern_post(decor_root, lp).get_parent(), 0.35)
+				var bp := Vector2(p.x, p.y) - n * 5.0 * flip + seg.normalized() * 2.0
+				var grove := Lanna.bamboo(decor_root, terrain.on_ground(Vector3(bp.x, 0, bp.y)), randi_range(5, 9))
+				_solid(grove, 1.0)
+				flip = -flip
+				next_lantern += 8.0
+			d += randf_range(2.2, 3.2) if lanterns else randf_range(3.5, 5.0)
+		walked += seg.length()
+
+
+## The Shrine of the Sleeping Naga: a small ruined chedi, broken walls, two
+## columns, lanterns and an altar stone holding the first grimoire page.
+func _build_shrine(c: Vector2, dir: Vector2) -> void:
+	var at := terrain.on_ground(Vector3(c.x, 0, c.y))
+	var back := Vector3(dir.x, 0, dir.y)
+	var ch := Lanna.chedi(decor_root, at + back * 3.0, 0.55, true)
+	_solid(ch, 2.0)
+	ch.set_meta("ruin", true)
+	var side := Vector3(-dir.y, 0, dir.x)
+	for s2 in [-1.0, 1.0]:
+		var w := Lanna.wall(decor_root, terrain.on_ground(at + side * 5.0 * s2 + back * 1.0), 3.0, atan2(dir.x, dir.y))
+		w.set_meta("ruin", true)
+		var col := Models.spawn(decor_root, "column", terrain.on_ground(at + side * 2.5 * s2 - back * 2.0))
+		if col != null:
+			col.set_meta("ruin", true)
+		_solid(Lanna.lantern_post(decor_root, terrain.on_ground(at + side * 3.5 * s2 - back * 3.5)).get_parent(), 0.35)
+	var altar := Art.add_mesh(decor_root, Art.box(Vector3(1.4, 0.8, 0.9)), Art.mat(Lanna.PLASTER.darkened(0.15)), at + Vector3(0, 0.4, 0))
+	_solid(altar, 0.7)
+	_spawn_resource("page", at + Vector3(0, 0.0, 0) - back * 1.2)
+	for i in range(6):
+		Models.spawn_variant(decor_root, "undergrowth", terrain.on_ground(at + Vector3(randf_range(-7, 7), 0, randf_range(-7, 7)) + back * 4.0), randf_range(0.8, 1.2))
+
+
+## The Temple of the Portal: a great chedi behind the Arcane Portal, broken
+## brick walls in a ring, columns, rubble, lanterns and two grimoire pages.
+func _build_temple(t: Vector2) -> void:
+	var center := terrain.on_ground(Vector3(t.x, 0, t.y))
+	var big := Lanna.chedi(decor_root, center + Vector3(0, 0, -7.0), 1.0, true)
+	_solid(big, 3.6)
+	big.set_meta("ruin", true)
+	for i in range(8):
+		var a := TAU * i / 8.0 + 0.2
+		if i == 2:
+			continue  # gap: the old trail comes in here
+		var p := center + Vector3(cos(a), 0, sin(a)) * (Cfg.RUINS_RADIUS - 1.0)
+		var w := Lanna.wall(decor_root, terrain.on_ground(p), randf_range(3.0, 5.0), -a + PI * 0.5)
+		w.set_meta("ruin", true)
+	for i in range(7):
+		var piece := Models.spawn_variant(decor_root, "ruin", _ruins_pos())
+		if piece != null:
+			piece.set_meta("ruin", true)
+	for i in range(4):
+		var a2 := TAU * i / 4.0 + 0.8
+		_solid(Lanna.lantern_post(decor_root, terrain.on_ground(center + Vector3(cos(a2), 0, sin(a2)) * 6.0)).get_parent(), 0.35)
+	for i in range(2):
+		_spawn_resource("page", _ruins_pos())
+	portal = PortalScene.instantiate()
+	portal.position = center
+	decor_root.add_child(portal)
+
+
+## Woods, not noise: clusters of trees with undergrowth, a few lone trees,
+## and bamboo groves near water; trails and clearings stay open.
+func _build_forest() -> void:
+	for c in range(15):
+		var center := _wild_pos(7.0)
+		for k in range(randi_range(4, 7)):
+			var p := terrain.on_ground(center + Vector3(randf_range(-6, 6), 0, randf_range(-6, 6)))
+			if terrain.on_trail(p.x, p.z, 4.0) or p.length() < 10.0 or terrain.is_water(p.x, p.z):
+				continue
+			_spawn_resource("tree", p)
+		for k in range(randi_range(3, 6)):
+			var u := terrain.on_ground(center + Vector3(randf_range(-7, 7), 0, randf_range(-7, 7)))
+			if not terrain.on_trail(u.x, u.z, 1.5) and not terrain.is_water(u.x, u.z):
+				Models.spawn_variant(decor_root, "undergrowth", u, randf_range(0.8, 1.3))
+	for i in range(12):
+		_spawn_resource("tree", _wild_pos(5.0))
+	for l in terrain.lakes:  # bamboo likes the water's edge
+		for k in range(2):
+			var a := randf() * TAU
+			var r: float = l.radius + randf_range(2.5, 4.5)
+			var bp := terrain.on_ground(Vector3(l.center.x + cos(a) * r, 0, l.center.y + sin(a) * r))
+			if not terrain.is_water(bp.x, bp.z):
+				_solid(Lanna.bamboo(decor_root, bp, randi_range(5, 8)), 1.0)
+	var landmark := Models.spawn(decor_root, "qn_twisted_1", _wild_pos(8.0))  # the old banyan: a far landmark
+	if landmark != null:
+		_solid(landmark, 2.0)
 
 
 ## New island, same apprentices (knowledge persists).
@@ -902,8 +1027,11 @@ func resolve_collision(pos: Vector3, radius := 0.45) -> Vector3:
 			p2 = _push_out(p2, Vector2(g.position.x, g.position.z), float(SOLID[g.kind]) + radius)
 	for st in _children(structures_root):
 		p2 = _push_out(p2, Vector2(st.position.x, st.position.z), _footprint(st.kind) * 0.7 + radius)
-	for ruin in pillars():
-		p2 = _push_out(p2, Vector2(ruin.position.x, ruin.position.z), 0.9 + radius)
+	for d in decor_root.get_children():
+		if d.has_meta("solid"):
+			p2 = _push_out(p2, Vector2(d.global_position.x, d.global_position.z), float(d.get_meta("solid")) + radius)
+		elif d.has_meta("ruin") and d is Node3D and not d.has_meta("solid"):
+			p2 = _push_out(p2, Vector2(d.position.x, d.position.z), 0.8 + radius)
 	if portal != null:
 		for side in [-2.0, 2.0]:  # the two arch posts; walk through the middle
 			p2 = _push_out(p2, Vector2(portal.position.x + side, portal.position.z), 0.6 + radius)

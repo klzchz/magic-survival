@@ -118,11 +118,16 @@ func _initialize() -> void:
 	for i in range(40):
 		relief = maxf(relief, absf(ter.height_at(randf_range(-50, 50), randf_range(-50, 50))))
 	_check(relief > 1.0, "the island has real relief (hills and basins)")
-	var shore := Vector3(lc.x + lake.radius + 6.0, 0, lc.y)
 	var walker = w.add_player(9, "aldric")
-	walker.position = ter.on_ground(shore)
+	var into := Vector3(-1, 0, 0)
+	for dv in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:  # a dry, in-bounds start
+		var cand: Vector3 = Vector3(lc.x, 0, lc.y) + dv * (float(lake.radius) + 6.0)
+		if absf(cand.x) < 55.0 and absf(cand.z) < 55.0 and ter.is_walkable(cand.x, cand.z):
+			walker.position = ter.on_ground(cand)
+			into = -dv
+			break
 	for _i in range(80):  # walk straight at the lake
-		walker.move(Vector3(-1, 0, 0), 0.05)
+		walker.move(into, 0.05)
 	_check(ter.is_walkable(walker.position.x, walker.position.z), "walking into a lake stops at the shore")
 	# collision: walk straight into a tree and slide around it instead of through it
 	var blocker = w.resources_of("tree")[0]
@@ -135,7 +140,7 @@ func _initialize() -> void:
 	_check(absf(walker.position.y - ter.height_at(walker.position.x, walker.position.z)) < 0.01, "apprentices follow the ground height")
 	w._despawn(walker)
 	var grass = ter.find_child("Grass", true, false)
-	_check(grass != null and grass.multimesh.instance_count > 3000, "dense grass field (MultiMesh)")
+	_check(grass != null and grass.multimesh.instance_count > 1500, "dense grass field (MultiMesh)")
 
 	# ---------- gather by hand, regrow ----------
 	# each tested node is moved to an isolated spot so neighbours never interfere

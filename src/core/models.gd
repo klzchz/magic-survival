@@ -5,9 +5,40 @@ extends RefCounted
 # Returns null when a model is missing, so callers can fall back to Art shapes.
 
 const ROOT := "res://assets/kaykit/"
+const QN := "../quaternius/nature/"   # Stylized Nature MegaKit (Quaternius, CC0)
 
 # id: [path under ROOT, uniform scale]
 const CATALOG := {
+	# Stylized Nature MegaKit (Quaternius, CC0): the island's living forest
+	"qn_tree_1": [QN + "CommonTree_1.gltf", 0.95],
+	"qn_tree_2": [QN + "CommonTree_2.gltf", 0.95],
+	"qn_tree_3": [QN + "CommonTree_3.gltf", 0.85],
+	"qn_tree_4": [QN + "CommonTree_4.gltf", 0.95],
+	"qn_tree_5": [QN + "CommonTree_5.gltf", 0.95],
+	"qn_pine_1": [QN + "Pine_1.gltf", 0.9],
+	"qn_pine_3": [QN + "Pine_3.gltf", 0.9],
+	"qn_twisted_1": [QN + "TwistedTree_1.gltf", 0.75],
+	"qn_twisted_3": [QN + "TwistedTree_3.gltf", 0.6],
+	"qn_rock_1": [QN + "Rock_Medium_1.gltf", 0.55],
+	"qn_rock_2": [QN + "Rock_Medium_2.gltf", 0.55],
+	"qn_rock_3": [QN + "Rock_Medium_3.gltf", 0.55],
+	"qn_bush": [QN + "Bush_Common.gltf", 0.9],
+	"qn_bush_flowers": [QN + "Bush_Common_Flowers.gltf", 0.9],
+	"qn_fern": [QN + "Fern_1.gltf", 0.9],
+	"qn_plant_1": [QN + "Plant_1_Big.gltf", 0.9],
+	"qn_plant_7": [QN + "Plant_7_Big.gltf", 1.6],
+	"qn_flower_3": [QN + "Flower_3_Group.gltf", 0.7],
+	"qn_flower_4": [QN + "Flower_4_Group.gltf", 0.7],
+	"qn_clover": [QN + "Clover_1.gltf", 1.0],
+	"qn_mushroom": [QN + "Mushroom_Common.gltf", 1.4],
+	"qn_shelf_mushroom": [QN + "Mushroom_Laetiporus.gltf", 1.0],
+	"qn_pebble_1": [QN + "Pebble_Round_2.gltf", 1.0],
+	"qn_pebble_2": [QN + "Pebble_Square_3.gltf", 1.0],
+	"qn_step_1": [QN + "RockPath_Round_Small_1.gltf", 1.0],
+	"qn_step_2": [QN + "RockPath_Round_Small_2.gltf", 1.0],
+	"qn_step_3": [QN + "RockPath_Round_Wide.gltf", 0.8],
+	"qn_grass_short": [QN + "Grass_Common_Short.gltf", 1.0],
+	"qn_grass_wispy": [QN + "Grass_Wispy_Tall.gltf", 1.0],
 	# characters
 	"mage": ["characters/Mage.glb", 0.8],
 	"skeleton": ["characters/Skeleton_Minion.glb", 0.8],
@@ -94,16 +125,16 @@ const CATALOG := {
 }
 
 const VARIANTS := {
-	"tree": ["pine_orange_l", "pine_orange_m", "pine_yellow_l", "pine_yellow_m", "pine_orange_s",
-		"dead_l", "dead_m", "green_a", "green_b", "grove_a", "grove_b"],
-	"border_tree": ["pine_orange_l", "pine_yellow_l", "pine_orange_m", "dead_l", "dead_l_deco", "grove_a", "grove_b"],
-	"rock": ["rock_a", "rock_b", "rock_c", "rock_d", "rock_e"],
+	"tree": ["qn_tree_1", "qn_tree_2", "qn_tree_3", "qn_tree_4", "qn_tree_5", "qn_tree_2", "qn_tree_4", "qn_pine_1"],
+	"border_tree": ["qn_tree_1", "qn_tree_3", "qn_tree_5", "qn_pine_1", "qn_pine_3", "qn_tree_2"],
+	"rock": ["qn_rock_1", "qn_rock_2", "qn_rock_3"],
 	"mountain": ["mountain_a", "mountain_b", "mountain_c"],
 	"hill": ["hill_a", "hill_b", "hill_c"],
-	"ruin": ["ruin_pillar", "column", "pillar_deco", "rubble_l", "rubble_h", "gravestone",
-		"grave_a", "grave_a_broken", "grave_b", "shrine", "fence_broken"],
-	"litter": ["pumpkin", "pumpkin_s", "pumpkin_ys", "bone_a", "bone_b", "bone_c", "ribcage",
-		"skull", "gravemarker_a", "gravemarker_b", "fence_post", "dead_s", "pine_yellow_s"],
+	"ruin": ["ruin_pillar", "column", "pillar_deco", "rubble_l", "rubble_h", "shrine", "column"],
+	"undergrowth": ["qn_fern", "qn_plant_1", "qn_plant_7", "qn_bush", "qn_fern", "qn_plant_1"],
+	"meadow": ["qn_flower_3", "qn_flower_4", "qn_clover", "qn_bush_flowers", "qn_pebble_1", "qn_pebble_2", "qn_shelf_mushroom"],
+	"stepping_stone": ["qn_step_1", "qn_step_2", "qn_step_3"],
+	"litter": ["qn_pebble_1", "qn_pebble_2", "qn_clover", "qn_flower_3"],
 }
 
 static var _cache := {}
@@ -114,7 +145,7 @@ static func scene(id: String) -> PackedScene:
 		return _cache[id]
 	var ps: PackedScene = null
 	if CATALOG.has(id):
-		var path: String = ROOT + CATALOG[id][0]
+		var path: String = (ROOT + CATALOG[id][0]).simplify_path()
 		if ResourceLoader.exists(path):
 			ps = load(path)
 	_cache[id] = ps
