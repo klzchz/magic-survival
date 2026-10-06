@@ -436,3 +436,40 @@ func _build_forest_wall() -> void:
 					_:
 						Models.spawn_variant(_built, "border_tree", p, randf_range(1.2, 1.7))
 			t += ring[1]
+
+
+## The world map picture (north = -Z at the top): distinct biome colours,
+## water, roads and hill shading, sampled from the real generated terrain.
+func build_map_image(px := 256) -> Image:
+	var img := Image.create(px, px, false, Image.FORMAT_RGB8)
+	var flowered := Color(0.42, 0.66, 0.32)
+	var gothic := Color(0.38, 0.34, 0.47)
+	var desert := Color(0.88, 0.74, 0.46)
+	var water := Color(0.22, 0.42, 0.68)
+	var road := Color(0.58, 0.45, 0.32)
+	var span := Cfg.WORLD * 2.0
+	var heights := PackedFloat32Array()
+	heights.resize(px * px)
+	for j in range(px):
+		for i in range(px):
+			heights[j * px + i] = height_at(-Cfg.WORLD + (i + 0.5) / px * span, -Cfg.WORLD + (j + 0.5) / px * span)
+	for j in range(px):
+		for i in range(px):
+			var x := -Cfg.WORLD + (i + 0.5) / px * span
+			var z := -Cfg.WORLD + (j + 0.5) / px * span
+			var h := heights[j * px + i]
+			var c: Color
+			if h < water_level:
+				c = water.darkened(clampf((water_level - h) * 0.15, 0.0, 0.4))
+			else:
+				var m := biome_mix(x, z)
+				c = flowered * m.x + gothic * m.y + desert * m.z
+				if on_trail(x, z, -0.6):
+					c = road.lerp(c, 0.25)
+				# hill shading: light from the north-west
+				var hw := heights[j * px + maxi(i - 1, 0)]
+				var hn := heights[maxi(j - 1, 0) * px + i]
+				var shade := clampf(1.0 + ((h - hw) + (h - hn)) * 0.35, 0.65, 1.3)
+				c = Color(c.r * shade, c.g * shade, c.b * shade)
+			img.set_pixel(i, j, c)
+	return img

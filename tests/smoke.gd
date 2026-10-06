@@ -516,6 +516,54 @@ func _initialize() -> void:
 	w.tick(0.05)
 	_check(w.objective_step == 2, "Thorne already holds an axe: the tool step is skipped")
 
+	# ---------- world map: fog of war, base, pins ----------
+	w.start_game("aldric")
+	p = w.local_player
+	w.tick(0.05)
+	var ex = w.exploration
+	_check(ex.is_discovered(Vector3.ZERO) and not ex.is_discovered(Vector3(w.gothic_center.x, 0, w.gothic_center.y)), "the map starts hidden except around the clearing")
+	var edge := Vector2(w.gothic_center.x, w.gothic_center.y) + (Vector2.ZERO - Vector2(w.gothic_center.x, w.gothic_center.y)).normalized() * 30.0
+	p.position = w.terrain.on_ground(Vector3(edge.x, 0, edge.y))
+	w.tick(0.05)
+	_check(ex.is_discovered(p.position), "walking reveals the ground around the apprentice")
+	_check(not ex.is_discovered(Vector3(w.gothic_center.x, 0, w.gothic_center.y) + Vector3(0, 0, -40)), "entering a biome does not reveal all of it")
+	var ratio_before: float = ex.discovered_ratio()
+	for k in range(8):
+		p.position = w.terrain.on_ground(p.position + Vector3(6, 0, 0))
+		w.tick(0.05)
+	_check(ex.discovered_ratio() > ratio_before, "the explored share grows gradually as you walk")
+	_check(ex.discovered_ratio() < 0.2, "most of the island stays hidden early on")
+	p.position = w.terrain.on_ground(Vector3(0, 0, 0))
+	p.inventory.add("grass", 3)
+	p.inventory.add("log", 2)
+	_build(w, p, "campfire", Vector3(4, 0, 4))
+	var fire_pos: Vector3 = w.structures_of("campfire")[0].position
+	_check(ex.is_discovered(fire_pos), "the base candidate stands in explored land (shown on the map)")
+	_check(w.map_set_base(fire_pos + Vector3(1, 0, 1)) and ex.base.kind == "campfire", "right click near a structure makes it the base")
+	_check(not w.map_set_base(Vector3(0, 0, -30)), "no structure nearby: the base is not changed")
+	w.map_toggle_marker(Vector3(2, 0, -3))
+	_check(ex.markers.size() == 1, "a personal pin is added on explored land")
+	w.map_toggle_marker(Vector3(3, 0, -3))
+	_check(ex.markers.size() == 0, "clicking an existing pin removes it")
+	w.map_toggle_marker(Vector3(w.desert_center.x, 0, w.desert_center.y))
+	_check(ex.markers.size() == 0, "unexplored land can't be pinned")
+	w.map_toggle_marker(Vector3(-2, 0, 2))
+	var img: Image = w.terrain.build_map_image(64)
+	var cg: Color = img.get_pixel(int((w.gothic_center.x + Cfg.WORLD) / (Cfg.WORLD * 2.0) * 64), int((w.gothic_center.y + Cfg.WORLD) / (Cfg.WORLD * 2.0) * 64))
+	var cd: Color = img.get_pixel(int((w.desert_center.x + Cfg.WORLD) / (Cfg.WORLD * 2.0) * 64), int((w.desert_center.y + Cfg.WORLD) / (Cfg.WORLD * 2.0) * 64))
+	_check(cd.r > cg.r and cd.g > cg.g, "the map picture paints the biomes in distinct colours")
+	w.toggle_map()
+	_check(w.map_open(), "M opens the map")
+	var before_move: Vector3 = p.position
+	w.tick(0.2)
+	_check(p.position.is_equal_approx(before_move), "the apprentice does not walk while the map is open")
+	w.toggle_map()
+	_check(not w.map_open(), "M closes the map")
+	var revealed: float = ex.discovered_ratio()
+	_check(w.save_run() and w.continue_run(), "save + continue with map data")
+	_check(is_equal_approx(w.exploration.discovered_ratio(), revealed), "explored area survives save/continue")
+	_check(w.exploration.base.get("kind", "") == "campfire" and w.exploration.markers.size() == 1, "base and pins survive save/continue")
+
 	# ---------- save / continue ----------
 	w.start_game("aldric")
 	p = w.local_player

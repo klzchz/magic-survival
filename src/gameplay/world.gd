@@ -20,6 +20,8 @@ const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4,
 const MetaSave = preload("res://src/core/meta_save.gd")
 const Terrain = preload("res://src/gameplay/systems/terrain.gd")
 const RunSave = preload("res://src/gameplay/run_save.gd")
+const Exploration = preload("res://src/gameplay/exploration.gd")
+const WorldMapScene = preload("res://scenes/world_map.tscn")
 const Inventory = preload("res://src/gameplay/inventory.gd")
 const WizardScene = preload("res://scenes/wizard.tscn")
 const ShadowScene = preload("res://scenes/shadow.tscn")
@@ -53,6 +55,9 @@ var portal = null
 var started := false
 var run_hearts := 0        # Mist Hearts of THIS run (records/spells stay permanent)
 var world_seed := 0        # rebuilds the same island on Continue
+var exploration: Exploration        # fog of war, base, personal pins (saved with the run)
+var world_map = null                # the M map screen
+var _last_reveal := Vector3(INF, 0, INF)
 var shrine_center := Vector2.ZERO   # Shrine of the Sleeping Naga (end of the Lantern Trail)
 var trail: Array = []               # Lantern Trail polyline (clearing -> shrine)
 var old_trail: Array = []           # old trail to the Temple of the Portal
@@ -103,6 +108,9 @@ func _ready() -> void:
 	day_night.dawn.connect(_on_dawn)
 	hud.world = self
 	_build_scenery()
+	world_map = WorldMapScene.instantiate()
+	world_map.world = self
+	add_child(world_map)
 	ambient = Node3D.new()
 	add_child(ambient)
 	fireflies = Fx.fireflies(ambient)
@@ -164,6 +172,8 @@ func continue_run() -> bool:
 	run_hearts = int(data.run_hearts)
 	objective_step = int(data.get("objective_step", 0))
 	obj_flags = data.get("obj_flags", {})
+	if data.has("exploration"):
+		exploration.from_save(data.exploration)
 	var p = local_player
 	var ps: Dictionary = data.player
 	p.position = RunSave.vec(ps.pos)
@@ -218,6 +228,8 @@ func pause() -> void:
 	if state != "playing":
 		return
 	cancel_placement()
+	if world_map != null:
+		world_map.close()
 	state = "paused"
 	_open_menu("Pausado", "", [["resume", "Continuar"], ["save", "Salvar partida"], ["controls", "Controles"], ["fullscreen", "Tela cheia"], ["save_menu", "Salvar e voltar ao menu"], ["save_quit", "Salvar e sair do jogo"]])
 
@@ -294,6 +306,11 @@ func start_game(character: String, seed_value := -1) -> void:
 	game_over = false
 	day_night.reset()
 	_generate_world(seed_value)  # terrain first: apprentices spawn on its ground
+	exploration = Exploration.new(Cfg.WORLD)
+	_last_reveal = Vector3(INF, 0, INF)
+	if world_map != null:
+		world_map.invalidate()
+		world_map.close()
 	local_player = add_player(1, character)
 	camera_rig.target = local_player
 	hud.visible = true
@@ -998,6 +1015,10 @@ func _build_desert(c: Vector2) -> void:
 
 ## New island, same apprentices (knowledge persists).
 func restart() -> void:
+	exploration = Exploration.new(Cfg.WORLD)
+	_last_reveal = Vector3(INF, 0, INF)
+	if world_map != null:
+		world_map.invalidate()
 	run_hearts = 0
 	won = false
 	game_over = false
@@ -1096,12 +1117,18 @@ func tick(delta: float) -> void:
 		_update_placement()
 	_obj_done_t = maxf(0.0, _obj_done_t - delta)
 	_update_objectives(local_player)
+	if local_player != null and exploration != null and local_player.position.distance_to(_last_reveal) > 3.0:
+		_last_reveal = local_player.position
+		exploration.reveal(local_player.position)
 	camera_rig.follow(delta)
 	hud.refresh(local_player, self)
 
 
 func _drive_local(delta: float) -> void:
 	var mv := Vector3.ZERO
+	if map_open():
+		local_player.move(Vector3.ZERO, delta)
+		return
 	if _autopilot and (Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
 			or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT)):
 		_autopilot = false  # a human took the controls: never fight their input
@@ -1250,6 +1277,60 @@ func _stage_scene(scene: String) -> void:
 			give(p, {"grass": 3, "log": 2})
 			hud.toggle_crafting()
 			craft(p, "campfire")
+
+
+# ---------- world map (M) ----------
+
+func map_open() -> bool:
+	return world_map != null and world_map.visible
+
+
+func toggle_map() -> void:
+	if map_open():
+		world_map.close()
+	elif state == "playing" and exploration != null:
+		cancel_placement()
+		world_map.open()
+
+
+## Landmarks shown on the map once their area has been explored.
+func map_landmarks() -> Array:
+	var out := [
+		{"name": "Clareira do Aprendiz", "pos": Vector3(0, 0, 0), "color": Color(0.45, 0.85, 0.45)},
+		{"name": "Santuário da Naga", "pos": Vector3(shrine_center.x, 0, shrine_center.y), "color": Color(0.95, 0.6, 0.3)},
+		{"name": "Templo do Portal", "pos": _ruins_center(), "color": Color(0.7, 0.45, 1.0)},
+		{"name": "Catedral Afundada", "pos": Vector3(gothic_center.x, 0, gothic_center.y), "color": Color(0.6, 0.6, 0.75)},
+		{"name": "Grande Obelisco", "pos": Vector3(obelisk_pos.x, 0, obelisk_pos.y), "color": Color(0.4, 0.9, 1.0)},
+		{"name": "Templo Soterrado", "pos": Vector3(buried_temple.x, 0, buried_temple.y), "color": Color(0.9, 0.7, 0.4)},
+	]
+	for l in terrain.lakes.filter(func(x): return x.get("biome", "") == "desert"):
+		out.append({"name": "Oásis", "pos": Vector3(l.center.x, 0, l.center.y), "color": Color(0.3, 0.7, 1.0)})
+	return out
+
+
+## Left click on the map: add a pin, or remove one near the click (explored areas only).
+func map_toggle_marker(at: Vector3) -> void:
+	if not exploration.is_discovered(at):
+		_announce("Só dá pra marcar áreas já exploradas")
+		return
+	_announce("Marcador adicionado" if exploration.toggle_marker(at) else "Marcador removido")
+
+
+## Right click on the map: the nearest structure (within 8 m) becomes the base.
+func map_set_base(at: Vector3) -> bool:
+	var best = null
+	var bd := 8.0
+	for st in _children(structures_root):
+		var d := Vector2(st.position.x - at.x, st.position.z - at.z).length()
+		if d < bd and exploration.is_discovered(st.position):
+			bd = d
+			best = st
+	if best == null:
+		_announce("Clique com o botão direito sobre uma construção para torná-la a base")
+		return false
+	exploration.set_base(best.kind, best.position)
+	_announce("Base definida: %s" % Data.display_name(best.kind))
+	return true
 
 
 ## F11 / Alt+Enter: fullscreen <-> window (the HUD scales with the window).
@@ -1663,6 +1744,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key != null and key.pressed and not key.echo and (key.keycode == KEY_F11 or (key.keycode == KEY_ENTER and key.alt_pressed)):
 		toggle_fullscreen()
 		return
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_M and state == "playing":
+		toggle_map()
+		return
+	if map_open():
+		if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+			world_map.close()
+		elif key != null and key.pressed and key.keycode == KEY_C:
+			world_map.center_on_player()
+		return  # the map screen owns the input while open
 	if placing != "" and state == "playing":
 		var mb := event as InputEventMouseButton
 		if key != null and key.pressed and not key.echo and (key.keycode == KEY_E or key.keycode == KEY_ENTER):
