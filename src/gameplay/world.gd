@@ -1,35 +1,32 @@
 extends Node3D
-# Magical Survive - island orchestrator (Godot 4).
-# Generates the island, spawns apprentices and Shadows, owns team progress
-# (nights, Mist Hearts, the Arcane Portal) and the action dispatcher.
-# Every apprentice action goes through perform(player, action), so Phase 2
-# co-op only has to forward client input to the host with one RPC.
+## Magical Survive - island orchestrator (Godot 4).
+## Generates the island, spawns apprentices and Shadows, owns team progress
+## (nights, Mist Hearts, the Arcane Portal), the crafting rules and the action
+## dispatcher. Every apprentice action goes through perform(player, action)
+## so Phase 2 co-op only has to forward client input to the host with one RPC.
+## Implements design/gdd/survival-loop-mvp.md.
 
 const Cfg = preload("res://src/core/config.gd")
 const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
 const Fx = preload("res://src/core/fx.gd")
+const Data = preload("res://src/core/data.gd")
 const MetaSave = preload("res://src/core/meta_save.gd")
+const Inventory = preload("res://src/gameplay/inventory.gd")
 const WizardScene = preload("res://scenes/wizard.tscn")
 const ShadowScene = preload("res://scenes/shadow.tscn")
 const GatherableScene = preload("res://scenes/gatherable.tscn")
 const StructureScene = preload("res://scenes/structure.tscn")
 const PortalScene = preload("res://scenes/portal.tscn")
+const SelectScene = preload("res://scenes/character_select.tscn")
 
 const KEY_ACTIONS := {
-	KEY_E: "interact", KEY_1: "eat", KEY_2: "feed_wisp", KEY_3: "brew", KEY_4: "cook",
-	KEY_5: "campfire", KEY_6: "ward", KEY_7: "wand", KEY_8: "cauldron", KEY_9: "elixir",
-	KEY_F: "lume", KEY_G: "shield", KEY_SPACE: "bolt",
+	KEY_E: "interact", KEY_SPACE: "interact", KEY_F: "bolt", KEY_Z: "lume", KEY_X: "shield",
 }
-const RECIPES := {
-	"campfire": {"cost": {"wood": 2, "stone": 1}, "offset": Vector3(1.5, 0, 0),
-		"ok": "Fogueira acesa (luz fixa + cozinhar)", "fail": "Fogueira: precisa 2 madeira + 1 pedra"},
-	"ward": {"cost": {"bone": 2, "twig": 1}, "offset": Vector3(-1.5, 0, 0),
-		"ok": "Ward de ossos fincado (Sombras não entram)", "fail": "Ward: precisa 2 ossos + 1 galho"},
-	"cauldron": {"cost": {"stone": 2, "wood": 2}, "offset": Vector3(0, 0, 1.5),
-		"ok": "Caldeirão montado (Elixir limpo com a tecla 9)", "fail": "Caldeirão: precisa 2 pedras + 2 madeiras"},
-}
-const ITEM_NAMES := {"mushroom": "cogumelo-fantasma", "twig": "galho"}
+const SLOT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0]
+const DROP_TABLE := {"bone": 1.0, "essence": 0.5}   # per spell-killed Shadow (chance)
+const BOSS_DROPS := {"bone": 5, "essence": 3}
+const DEFAULT_CHARACTER := "aldric"
 
 @onready var day_night = $DayNight
 @onready var camera_rig = $CameraRig
@@ -43,13 +40,15 @@ const ITEM_NAMES := {"mushroom": "cogumelo-fantasma", "twig": "galho"}
 var meta := MetaSave.new()
 var local_player = null
 var portal = null
+var started := false
 var won := false
 var game_over := false
-var shot_timer := -1.0     # dev: MAGIC_SHOT=1 saves user://shot.png after 3s
+var shot_timer := -1.0     # dev: MAGIC_SHOT=1 saves a screenshot after MAGIC_SHOT_AT s
 var shot_path := "user://shot.png"
 var ambient: Node3D        # follows the local apprentice: fireflies + leaves
 var fireflies: CPUParticles3D
 var leaves: CPUParticles3D
+var select_screen = null
 
 
 func _ready() -> void:
@@ -60,17 +59,42 @@ func _ready() -> void:
 	meta.load_from_disk()
 	day_night.night_started.connect(_on_night_start)
 	day_night.dawn.connect(_on_dawn)
+	hud.world = self
 	_build_scenery()
-	local_player = add_player(1)
-	camera_rig.target = local_player
 	ambient = Node3D.new()
 	add_child(ambient)
 	fireflies = Fx.fireflies(ambient)
 	leaves = Fx.leaves(ambient)
+	var forced := OS.get_environment("MAGIC_CHAR")
+	if forced != "" or DisplayServer.get_name() == "headless":
+		start_game(forced if forced != "" else DEFAULT_CHARACTER)
+	else:
+		hud.visible = false
+		select_screen = SelectScene.instantiate()
+		select_screen.chosen.connect(start_game)
+		add_child(select_screen)
+
+
+## Starts (or restarts) a run as the chosen character on a fresh island.
+func start_game(character: String) -> void:
+	if select_screen != null:
+		select_screen.queue_free()
+		select_screen = null
+	for p in players():
+		_despawn(p)
+	won = false
+	game_over = false
+	day_night.reset()
+	local_player = add_player(1, character)
+	camera_rig.target = local_player
+	hud.visible = true
+	hud.hide_end()
 	_generate_world()
-	# dev: MAGIC_TIME=<seconds> starts the clock later (e.g. 60 = first night)
+	started = true
+	# dev: MAGIC_TIME=<seconds> starts the clock later (e.g. 58 = first night)
 	if OS.get_environment("MAGIC_TIME") != "":
 		day_night.t = float(OS.get_environment("MAGIC_TIME"))
+	_announce("%s %s chega à ilha. Colete capim, galhos e pederneira." % [local_player.stats.get("name", ""), local_player.stats.get("title", "")])
 
 
 # ---------- scenery (built once: ground, grass, the forest wall) ----------
@@ -172,6 +196,10 @@ func resources_of(kind: String) -> Array:
 	return resources().filter(func(g): return g.kind == kind)
 
 
+func ground_items(id := "") -> Array:
+	return resources().filter(func(g): return g.kind == "item" and (id == "" or g.item_id == id))
+
+
 func structures_of(kind: String) -> Array:
 	return _children(structures_root).filter(func(s): return s.kind == kind)
 
@@ -199,9 +227,19 @@ func is_lit(pos: Vector3, lit: float) -> bool:
 		if pos.distance_to(p.position) < p.light_radius():
 			return true
 	for fire in structures_of("campfire"):
-		if pos.distance_to(fire.position) < Cfg.FIRE_RADIUS:
+		if fire.burning() and pos.distance_to(fire.position) < fire.radius():
 			return true
 	return false
+
+
+## Nearest structure of a kind within its working radius (tech, cooking).
+func near_structure(p, kind: String):
+	for s in structures_of(kind):
+		if kind == "campfire" and not s.burning():
+			continue
+		if p.position.distance_to(s.position) < s.radius():
+			return s
+	return null
 
 
 # Bone wards push Shadows out to the edge of their circle.
@@ -222,11 +260,12 @@ func apply_wards(pos: Vector3) -> Vector3:
 
 # ---------- spawning ----------
 
-func add_player(peer_id: int):
+func add_player(peer_id: int, character := DEFAULT_CHARACTER):
 	var w = WizardScene.instantiate()
 	w.peer_id = peer_id
 	w.slot = players_root.get_child_count()
 	w.name = "Wizard%d" % peer_id
+	w.setup(character)
 	players_root.add_child(w)
 	w.respawn(_spawn_spot(w.slot), meta.knows("eco"))
 	return w
@@ -251,9 +290,9 @@ func spawn_shadow(boss := false):
 	return s
 
 
-func spawn_structure(kind: String, pos: Vector3):
+func spawn_structure(kind: String, pos: Vector3, burn_mult := 1.0):
 	var s = StructureScene.instantiate()
-	s.setup(kind)
+	s.setup(kind, burn_mult)
 	s.position = pos
 	structures_root.add_child(s)
 	return s
@@ -265,6 +304,24 @@ func _spawn_resource(kind: String, pos: Vector3):
 	g.position = pos
 	resources_root.add_child(g)
 	return g
+
+
+## Drops items on the ground (loot, overflow, manual drop).
+func spawn_item(id: String, count: int, pos: Vector3, stack := {}):
+	var g = GatherableScene.instantiate()
+	g.setup_item(id, count, stack)
+	g.position = Vector3(pos.x, 0.0, pos.z)
+	resources_root.add_child(g)
+	return g
+
+
+## Gives items to an apprentice; whatever does not fit falls at their feet.
+func give(p, items: Dictionary) -> void:
+	for id in items:
+		var left: int = p.inventory.add(id, int(items[id]))
+		if left > 0:
+			spawn_item(id, left, p.position + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)))
+			_say(p, "Inventário cheio: %s caiu no chão" % Data.item_name(id))
 
 
 # Removes from the tree immediately (counts stay exact this frame), frees later.
@@ -300,10 +357,22 @@ func _generate_world() -> void:
 		_spawn_resource("tree", pos)
 	for i in range(20):
 		_spawn_resource("rock", _rand_pos())
-	for i in range(40):
+	for i in range(30):
 		_spawn_resource("mushroom", _rand_pos())
-	for i in range(34):
-		_spawn_resource("twig", _rand_pos())
+	for i in range(45):
+		_spawn_resource("grass_tuft", _rand_pos())
+	for i in range(35):
+		_spawn_resource("sapling", _rand_pos())
+	for i in range(18):
+		_spawn_resource("berry_bush", _rand_pos())
+	for i in range(26):  # flint lies on the ground: the first axe needs it
+		spawn_item("flint", 1, _rand_pos())
+	# a starter kit near the spawn so the first minutes teach the loop
+	for k in [["grass_tuft", Vector3(4, 0, 2)], ["grass_tuft", Vector3(5, 0, -1)], ["sapling", Vector3(-4, 0, 3)],
+			["sapling", Vector3(-3, 0, -4)], ["berry_bush", Vector3(2, 0, 6)]]:
+		_spawn_resource(k[0], k[1])
+	spawn_item("flint", 1, Vector3(-2, 0, 5))
+	spawn_item("flint", 1, Vector3(3, 0, -5))
 
 	# Ruins of the Fallen College: broken pillars, graves, candles, a crypt
 	var pillar_mat := Art.mat(Color(0.55, 0.53, 0.58))
@@ -339,6 +408,8 @@ func _generate_world() -> void:
 	decor_root.add_child(portal)
 
 
+
+## New island, same apprentices (knowledge persists).
 func restart() -> void:
 	won = false
 	game_over = false
@@ -356,17 +427,29 @@ func _process(delta: float) -> void:
 
 
 func tick(delta: float) -> void:
+	if shot_timer > 0.0:
+		shot_timer -= delta
+		if shot_timer <= 0.0:
+			get_viewport().get_texture().get_image().save_png(shot_path)
+			print("MAGIC_SHOT saved: ", shot_path)
+	if not started:
+		return
 	if won or game_over:
 		camera_rig.follow(delta)
 		return
 
 	day_night.advance(delta)
 	var lit: float = day_night.light()
+	var night := lit < 0.35
 	if local_player != null and not local_player.dead:
 		_drive_local(delta)
 	for p in players():
 		if not p.dead:
-			p.tick_stats(delta)
+			var note: String = p.tick_stats(delta)
+			if note != "":
+				_say(p, note)
+			if p.tick_darkness(is_lit(p.position, lit), night, delta) and p.dark_t < Cfg.DARK_WARN_AT:
+				_say(p, "A Névoa te arranha no escuro! Acenda uma luz!")
 		p.update_wisp_light(lit)
 	day_night.apply_visuals(lit)
 	if local_player != null:
@@ -374,8 +457,14 @@ func tick(delta: float) -> void:
 	fireflies.emitting = lit < 0.45
 	leaves.emitting = lit > 0.5
 
+	for fire in structures_of("campfire"):
+		fire.burn(delta)
+	for g in resources():
+		if not g.grown:
+			g.tick_regrow(delta)
+
 	# Shadows rise at night; corruption and the Blood Moon make them thicker
-	if lit < 0.35 and shadows_root.get_child_count() < Cfg.SHADOW_CAP:
+	if night and shadows_root.get_child_count() < Cfg.SHADOW_CAP:
 		var rate := 0.5 + _team_corruption() * 0.03
 		if day_night.blood_moon:
 			rate *= 2.0
@@ -388,12 +477,6 @@ func tick(delta: float) -> void:
 			_on_shadow_death(s)
 
 	_check_deaths()
-
-	if shot_timer > 0.0:
-		shot_timer -= delta
-		if shot_timer <= 0.0:
-			get_viewport().get_texture().get_image().save_png(shot_path)
-			print("MAGIC_SHOT saved: ", shot_path)
 
 	camera_rig.follow(delta)
 	hud.refresh(local_player, self)
@@ -410,7 +493,7 @@ func _drive_local(delta: float) -> void:
 	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
 		mv -= camera_rig.right()
 	local_player.move(mv, delta)
-	# camera rotate (Don't Starve style): Q left, PageUp right (E interacts)
+	# camera rotate (Don't Starve style): Q left, PageUp right
 	if Input.is_key_pressed(KEY_Q):
 		camera_rig.angle -= 1.4 * delta
 	if Input.is_key_pressed(KEY_PAGEUP):
@@ -443,7 +526,7 @@ func _on_night_start(blood_moon: bool) -> void:
 		_announce("LUA DE SANGUE! Algo grande caça vocês esta noite.")
 		spawn_shadow(true)
 	else:
-		_announce("A Névoa desce. Mantenha o fogo-fátuo aceso.")
+		_announce("A Névoa desce. Fique perto da luz.")
 
 
 func _on_dawn(nights: int) -> void:
@@ -455,24 +538,25 @@ func _on_shadow_death(s) -> void:
 	var who = s.last_hitter
 	if who != null and not is_instance_valid(who):
 		who = null
+	var at: Vector3 = s.position
 	if s.boss:
 		meta.hearts += 1
 		meta.save()
-		if who == null:
-			who = nearest_player(s.position)
-		if who != null:
-			who.gain({"bone": 5})
-		_announce("O CORAÇÃO DA NÉVOA CAIU! +5 ossos (corações: %d/%d p/ o Portal)" % [meta.hearts, Cfg.PORTAL_HEARTS])
+		for id in BOSS_DROPS:
+			spawn_item(id, BOSS_DROPS[id], at + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)))
+		_announce("O CORAÇÃO DA NÉVOA CAIU! (corações: %d/%d p/ o Portal) Recolha o butim." % [meta.hearts, Cfg.PORTAL_HEARTS])
 	elif who != null:
-		who.gain({"bone": 1})
-		_say(who, "A Sombra deixou um osso")
+		for id in DROP_TABLE:
+			if randf() < DROP_TABLE[id]:
+				spawn_item(id, 1, at + Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.8, 0.8)))
+		_say(who, "A Sombra se desfez e deixou restos")
 	_despawn(s)
 
 
 # ---------- messages ----------
 
 func _say(p, text: String) -> void:
-	if p == local_player:
+	if p == local_player and text != "":
 		hud.flash(text)
 
 
@@ -482,32 +566,24 @@ func _announce(text: String) -> void:
 
 # ---------- actions ----------
 
+## Single entry point for every apprentice action (network-ready).
+## Actions: interact · bolt · lume · shield · use:<slot> · alt:<slot> ·
+## craft:<recipe id> · unequip:hand
 func perform(p, action: String) -> void:
 	if p == null or p.dead or won or game_over:
 		return
-	match action:
+	var parts := action.split(":")
+	match parts[0]:
 		"interact":
 			_interact(p)
-		"eat":
-			p.play_action("use")
-			_say(p, p.eat())
-		"feed_wisp":
-			p.play_action("use")
-			_say(p, p.feed_wisp())
-		"brew":
-			p.play_action("use")
-			_say(p, p.brew())
-		"cook":
-			p.play_action("build")
-			_say(p, p.cook() if _near(p, "campfire") else "Precisa estar perto de uma fogueira")
-		"elixir":
-			p.play_action("use")
-			_say(p, p.brew_elixir() if _near(p, "cauldron") else "Precisa estar perto de um caldeirão")
-		"wand":
-			p.play_action("build")
-			_say(p, p.upgrade_wand())
-		"campfire", "ward", "cauldron":
-			_build(p, action)
+		"use":
+			_say(p, p.use_slot(int(parts[1])))
+		"alt":
+			_alt_use(p, int(parts[1]))
+		"craft":
+			craft(p, parts[1])
+		"unequip":
+			_say(p, p.unequip_hand())
 		"lume":
 			_cast_lume(p)
 		"shield":
@@ -516,28 +592,69 @@ func perform(p, action: String) -> void:
 			_cast_bolt(p)
 
 
-func _near(p, kind: String) -> bool:
-	for s in structures_of(kind):
-		if p.position.distance_to(s.position) < s.radius():
-			return true
-	return false
+## Why a recipe can't be crafted right now ("" = it can).
+func craft_blocker(p, rid: String) -> String:
+	var r := Data.recipe(rid)
+	if r.is_empty():
+		return "Receita desconhecida"
+	var tech := Data.tab_tech(r.tab)
+	if tech != "" and near_structure(p, tech) == null:
+		return "Precisa estar perto de: %s" % Data.display_name(tech)
+	if not p.inventory.has_all(r.cost):
+		return "Faltam materiais"
+	return ""
 
 
-func _build(p, kind: String) -> void:
-	var recipe: Dictionary = RECIPES[kind]
-	if not p.pay(recipe.cost):
-		_say(p, recipe.fail)
-		return
-	spawn_structure(kind, p.position + recipe.offset)
+func craft(p, rid: String) -> bool:
+	var why := craft_blocker(p, rid)
+	if why != "":
+		_say(p, why)
+		return false
+	var r := Data.recipe(rid)
+	p.inventory.pay(r.cost)
 	p.play_action("build")
-	_say(p, recipe.ok)
+	if r.get("structure", false):
+		var fwd: Vector3 = camera_rig.forward() if p == local_player else Vector3(0, 0, 1)
+		var mult: float = p.perk("fire_mult") if rid == "campfire" else 1.0
+		spawn_structure(rid, p.position + fwd * 2.2, mult)
+		_say(p, "Construiu: %s" % Data.display_name(rid))
+	else:
+		give(p, {rid: 1})
+		_say(p, "Criou: %s" % Data.display_name(rid))
+	return true
+
+
+## Secondary use (right click / Shift+number): cook food or feed a fire when
+## next to a burning campfire, otherwise drop the stack on the ground.
+func _alt_use(p, i: int) -> void:
+	var s = p.inventory.slots[i]
+	if s == null:
+		return
+	var d := Data.item(s.id)
+	var fire = near_structure(p, "campfire")
+	if fire != null and d.has("cooked"):
+		p.inventory.take_from(i)
+		give(p, {d.cooked: 1})
+		p.play_action("build")
+		_say(p, "Assou: %s" % Data.item_name(d.cooked))
+	elif fire != null and d.has("fuel"):
+		p.inventory.take_from(i)
+		fire.add_fuel(float(d.fuel) * p.perk("fire_mult"))
+		p.play_action("build")
+		_say(p, "Alimentou a fogueira")
+	else:
+		var stack: Dictionary = p.inventory.take_from(i, s.count)
+		spawn_item(stack.id, stack.count, p.position + Vector3(0.8, 0, 0.8), stack)
+		_say(p, "Largou: %s" % Data.item_name(stack.id))
 
 
 func _interact(p) -> void:
-	# E: pick up reagents/pages, strike trees/rocks, or touch the Portal
+	# E / Space: pick, chop (axe), mine (pickaxe), grab loot, or touch the Portal
 	var best = null
 	var bd := Cfg.INTERACT_RADIUS
 	for g in resources():
+		if not g.grown:
+			continue
 		var d: float = p.position.distance_to(g.position)
 		if d < bd:
 			bd = d
@@ -552,39 +669,58 @@ func _interact(p) -> void:
 		return
 
 	var kind: String = best.kind
+	var tool: String = best.tool_needed()
 	p.face(best.position)
-	p.play_action("chop" if kind == "tree" or kind == "rock" else "pickup")
-	if not best.strike():
-		_say(p, "Golpeou a %s (%d)" % ["árvore" if kind == "tree" else "pedra", best.hp])
+	if tool != "" and p.inventory.hand_data().get("tool", "") != tool:
+		_say(p, "Precisa de %s equipado" % ("um Machado" if tool == "axe" else "uma Picareta"))
 		return
-	_despawn(best)
-	match kind:
-		"page":
-			_learn_next_spell(p)
-		"tree":
-			p.gain(best.gives())
-			_say(p, "Árvore caiu: +2 madeira")
-		"rock":
-			p.gain(best.gives())
-			_say(p, "Pedra quebrou: +2 pedra")
-		_:
-			p.gain(best.gives())
-			_say(p, "+1 " + ITEM_NAMES.get(kind, kind))
+	p.play_action("chop" if tool != "" else "pickup")
+	if tool != "":
+		var broke: String = p.inventory.wear("hand", 1.0)
+		if broke != "":
+			p.refresh_gear()
+			_say(p, "%s quebrou!" % Data.item_name(broke))
+	var power: int = int(p.perk("strike_power")) if tool != "" else 1
+	if not best.strike(power):
+		_say(p, "Golpeou: %s (%d)" % [best.display_name(), best.hp])
+		return
+	if kind == "page":
+		_despawn(best)
+		_learn_next_spell(p)
+		return
+	if kind == "item" and not best.item_stack.is_empty():
+		if not p.inventory.put_stack(best.item_stack):  # keeps durability / freshness
+			best.hp = 1
+			_say(p, "Inventário cheio")
+			return
+		_despawn(best)
+		_say(p, "Pegou: %s" % best.display_name())
+		return
+	var loot: Dictionary = best.gives()
+	give(p, loot)
+	if best.regrows():
+		best.set_picked()
+	else:
+		_despawn(best)
+	var parts := []
+	for id in loot:
+		parts.append("+%d %s" % [loot[id], Data.item_name(id)])
+	_say(p, ", ".join(parts))
 
 
 func _learn_next_spell(p) -> void:
 	match meta.learn_next():
 		"lume":
-			_announce("Aprenderam LUME (F): explosão de luz que queima Sombras próximas")
+			_announce("Aprenderam LUME (Z): explosão de luz que queima Sombras próximas")
 		"escudo":
-			_announce("Aprenderam ESCUDO (G): barreira que bloqueia dano por 6s")
+			_announce("Aprenderam ESCUDO (X): barreira que bloqueia dano por 6s")
 		"eco":
 			for q in players():
 				q.apply_meta(true)
-			_announce("Aprenderam ECO ARCANO: mana máxima cresce para 130")
+			_announce("Aprenderam ECO ARCANO: +30 de mana máxima")
 		_:
-			p.gain({"bone": 1})
-			_say(p, "Página em branco... virou pó de osso (+1 osso)")
+			give(p, {"essence": 1})
+			_say(p, "Página em branco... virou Essência (+1)")
 
 
 func _try_portal(p) -> void:
@@ -614,6 +750,11 @@ func _cast_bolt(p) -> void:
 		if d < bd:
 			bd = d
 			best = s
+	if p.inventory.hand_id() == "bone_staff":
+		var broke: String = p.inventory.wear("hand", 1.0)
+		if broke != "":
+			p.refresh_gear()
+			_say(p, "O Cajado de Osso se partiu!")
 	if best == null:
 		p.play_action("bolt")
 		_say(p, "Feitiço lançado no vazio")
@@ -637,7 +778,7 @@ func _cast_lume(p) -> void:
 	var burned := 0
 	for s in shadows():
 		if s.position.distance_to(p.position) < 10.0:
-			s.hp -= 50.0
+			s.hp -= 50.0 * p.perk("bolt_mult")
 			s.last_hitter = p
 			burned += 1
 	p.wisp = minf(100.0, p.wisp + 10.0)
@@ -659,10 +800,17 @@ func _cast_shield(p) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if not started:
+		return
 	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo:
 		if key.keycode == KEY_R and (won or game_over):
 			restart()
+		elif key.keycode == KEY_TAB:
+			hud.toggle_crafting()
+		elif SLOT_KEYS.has(key.keycode):
+			var i := SLOT_KEYS.find(key.keycode)
+			perform(local_player, ("alt:%d" if key.shift_pressed else "use:%d") % i)
 		elif KEY_ACTIONS.has(key.keycode):
 			perform(local_player, KEY_ACTIONS[key.keycode])
 		return

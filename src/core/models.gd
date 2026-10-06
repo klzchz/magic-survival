@@ -13,8 +13,15 @@ const CATALOG := {
 	"skeleton": ["characters/Skeleton_Minion.glb", 0.8],
 	"skeleton_mage": ["characters/Skeleton_Mage.glb", 0.8],
 	"skeleton_boss": ["characters/Skeleton_Warrior.glb", 1.5],
+	"rogue_hooded": ["characters/Rogue_Hooded.glb", 0.8],
+	"knight": ["characters/Knight.glb", 0.8],
 	# props
 	"spellbook": ["props/spellbook_open.gltf", 1.0],
+	"axe_1handed": ["props/axe_1handed.gltf", 1.0],
+	"staff": ["props/staff.gltf", 1.0],
+	"bottle_A_green": ["dungeon/bottle_A_green.glb", 1.0],
+	"bottle_B_green": ["dungeon/bottle_B_green.glb", 1.0],
+	"bottle_C_brown": ["dungeon/bottle_C_brown.glb", 1.0],
 	# forest (Halloween Bits)
 	"pine_orange_l": ["halloween/tree_pine_orange_large.gltf", 1.0],
 	"pine_orange_m": ["halloween/tree_pine_orange_medium.gltf", 1.0],

@@ -15,3 +15,4 @@ const SHADOW_CAP := 40        # max Shadows alive at once
 const MAX_PLAYERS := 4        # co-op cap (Phase 2)
 const SAVE_PATH := "user://magic_survival_meta.json"
 const SPELL_ORDER := ["lume", "escudo", "eco"]
+const DARK_WARN_AT := 2.3     # show the darkness warning only at its start

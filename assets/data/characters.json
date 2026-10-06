@@ -1,0 +1,109 @@
+{
+ "aldric": {
+  "name": "Aldric",
+  "title": "o Alquimista",
+  "model": "mage",
+  "glow": [
+   1.0,
+   0.8,
+   0.5
+  ],
+  "health": 80,
+  "hunger": 150,
+  "mana": 150,
+  "mana_regen": 1.0,
+  "hunger_rate": 1.0,
+  "damage_taken": 1.0,
+  "potion_mult": 1.5,
+  "fire_mult": 1.0,
+  "bolt_mult": 1.0,
+  "strike_power": 1,
+  "start": {
+   "mushroom": 2,
+   "elixir": 1
+  },
+  "perks": [
+   "Poções +50% mais fortes",
+   "Mana máxima 150"
+  ],
+  "flaw": "Frágil: só 80 de vida",
+  "hide": [
+   "Spellbook",
+   "Spellbook_open",
+   "2H_Staff"
+  ]
+ },
+ "brasa": {
+  "name": "Brasa",
+  "title": "a Piromante",
+  "model": "rogue_hooded",
+  "glow": [
+   1.0,
+   0.45,
+   0.2
+  ],
+  "health": 100,
+  "hunger": 120,
+  "mana": 100,
+  "mana_regen": 1.0,
+  "hunger_rate": 1.3,
+  "damage_taken": 1.0,
+  "potion_mult": 1.0,
+  "fire_mult": 2.0,
+  "bolt_mult": 1.5,
+  "strike_power": 1,
+  "start": {
+   "torch": 1,
+   "grass": 2
+  },
+  "perks": [
+   "Fogueiras dela duram 2x",
+   "Feitiço queima Sombras +50%",
+   "Começa com uma tocha"
+  ],
+  "flaw": "Sempre com fome (+30%)",
+  "hide": [
+   "Knife_Offhand",
+   "1H_Crossbow",
+   "2H_Crossbow",
+   "Knife",
+   "Throwable"
+  ]
+ },
+ "thorne": {
+  "name": "Thorne",
+  "title": "o Guardião",
+  "model": "knight",
+  "glow": [
+   0.6,
+   0.85,
+   1.0
+  ],
+  "health": 150,
+  "hunger": 150,
+  "mana": 60,
+  "mana_regen": 0.5,
+  "hunger_rate": 1.0,
+  "damage_taken": 0.75,
+  "potion_mult": 1.0,
+  "fire_mult": 1.0,
+  "bolt_mult": 1.0,
+  "strike_power": 2,
+  "start": {
+   "axe": 1
+  },
+  "perks": [
+   "150 de vida, -25% de dano",
+   "Corta e minera em dobro",
+   "Começa com um machado"
+  ],
+  "flaw": "Mago fraco: só 60 de mana",
+  "hide": [
+   "1H_Sword_Offhand",
+   "Badge_Shield",
+   "Rectangle_Shield",
+   "Spike_Shield",
+   "2H_Sword"
+  ]
+ }
+}

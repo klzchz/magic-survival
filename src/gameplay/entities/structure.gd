@@ -1,40 +1,53 @@
 extends Node3D
-# Something an apprentice built: campfire (light + cooking), bone ward
-# (Shadows can't enter) or cauldron (clean elixir). Call setup() before
-# adding it to the tree. Lights flicker; fire and brew are particles.
+## Something an apprentice built: campfire (burns fuel, light + cooking),
+## Arcane Altar (unlocks the Magia tab), bone ward (Shadows can't enter) or
+## cauldron (unlocks Alquimia). Call setup() before adding it to the tree.
 
 const Cfg = preload("res://src/core/config.gd")
 const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
 const Fx = preload("res://src/core/fx.gd")
 
+const FIRE_START := 120.0  # seconds of fuel a new campfire starts with
+const FIRE_MAX := 240.0
+const TECH_RADIUS := 6.0   # how close you stand to use an altar / cauldron
+
 var kind := "campfire"
+var fuel := 0.0
+var fuel_mult := 1.0       # Brasa's fires burn twice as long
 var light: OmniLight3D
+var flames: CPUParticles3D
 var _base_energy := 1.0
 var _clock := 0.0
 
 
-func setup(k: String) -> void:
+func setup(k: String, burn_mult := 1.0) -> void:
 	kind = k
+	fuel_mult = burn_mult
+	if kind == "campfire":
+		fuel = FIRE_START
 
 
 func _ready() -> void:
 	_clock = randf() * TAU
 	match kind:
 		"campfire":
-			# ring of stones around crossed logs, flames and warm light
 			for i in range(7):
 				var a := TAU * i / 7.0
-				var stone := Models.spawn_variant(self, "rock", Vector3(cos(a), 0, sin(a)) * 0.95, 0.45)
-				if stone == null:
+				if Models.spawn_variant(self, "rock", Vector3(cos(a), 0, sin(a)) * 0.95, 0.45) == null:
 					Art.add_mesh(self, Art.sphere(0.18, 0.22), Art.mat(Color(0.4, 0.4, 0.42)), Vector3(cos(a), 0.08, sin(a)) * 0.95)
 			for i in range(3):
 				var log_node := Models.spawn(self, "log_s", Vector3.ZERO, 0.9)
 				if log_node == null:
 					log_node = Art.add_mesh(self, Art.cylinder(0.12, 0.12, 1.0), Art.mat(Color(0.35, 0.22, 0.12)), Vector3(0, 0.12, 0))
 				log_node.rotation.y = TAU * i / 3.0
-			Fx.flames(self, Vector3(0, 0.45, 0))
+			flames = Fx.flames(self, Vector3(0, 0.45, 0))
 			light = Art.add_light(self, Color(1.0, 0.6, 0.25), Cfg.FIRE_RADIUS, 1.8, Vector3(0, 1.6, 0))
+		"altar":
+			if Models.spawn(self, "shrine", Vector3.ZERO, 1.4) == null:
+				Art.add_mesh(self, Art.box(Vector3(1.2, 1.0, 1.2)), Art.mat(Color(0.5, 0.48, 0.55)), Vector3(0, 0.5, 0))
+			light = Art.add_light(self, Color(0.7, 0.5, 1.0), 5.0, 1.0, Vector3(0, 2.5, 0))
+			Fx.motes(self, Vector3(0, 2.0, 0), Color(0.75, 0.55, 1.0), 1.2, 20)
 		"ward":
 			if Models.spawn(self, "post_skull") == null:
 				Art.add_mesh(self, Art.cylinder(0.08, 0.22, 1.6), Art.emissive(Color(0.75, 0.7, 0.9), Color(0.5, 0.3, 0.9)), Vector3(0, 0.8, 0))
@@ -62,13 +75,36 @@ func _process(delta: float) -> void:
 		return
 	_clock += delta
 	var flicker := 0.12 if kind == "campfire" else 0.05
-	light.light_energy = _base_energy * (1.0 + sin(_clock * 11.0) * flicker * 0.5 + sin(_clock * 23.0) * flicker * 0.5)
+	var strength := 1.0
+	if kind == "campfire":
+		strength = clampf(fuel / 60.0, 0.0, 1.0)
+	light.light_energy = _base_energy * strength * (1.0 + sin(_clock * 11.0) * flicker * 0.5 + sin(_clock * 23.0) * flicker * 0.5)
 
 
+## Campfires burn down; at 0 fuel they are cold embers (no light, no cooking).
+func burn(delta: float) -> void:
+	if kind != "campfire" or fuel <= 0.0:
+		return
+	fuel = maxf(0.0, fuel - delta / fuel_mult)
+	if flames != null:
+		flames.emitting = fuel > 0.0
+
+
+func add_fuel(seconds: float) -> void:
+	fuel = minf(FIRE_MAX, fuel + seconds)
+	if flames != null:
+		flames.emitting = true
+
+
+func burning() -> bool:
+	return kind == "campfire" and fuel > 0.0
+
+
+## Light / effect radius (campfire shrinks as it burns out).
 func radius() -> float:
 	match kind:
 		"campfire":
-			return Cfg.FIRE_RADIUS
+			return Cfg.FIRE_RADIUS * clampf(fuel / 60.0, 0.4, 1.0) if fuel > 0.0 else 0.0
 		"ward":
 			return Cfg.WARD_RADIUS
-	return Cfg.CAULDRON_RADIUS
+	return TECH_RADIUS

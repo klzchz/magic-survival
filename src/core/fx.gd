@@ -117,12 +117,12 @@ static func fireflies(parent: Node3D) -> CPUParticles3D:
 # Daytime falling leaves in autumn tones.
 static func leaves(parent: Node3D) -> CPUParticles3D:
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.25, 0.18)
+	quad.size = Vector2(0.14, 0.1)
 	var m := StandardMaterial3D.new()
 	m.albedo_color = Color(0.95, 0.55, 0.15)
 	m.vertex_color_use_as_albedo = true
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var p := _particles(parent, 50, 7.0, quad, m, Vector3(0, 10, 0))
+	var p := _particles(parent, 40, 6.0, quad, m, Vector3(0, 6, 0))
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 	p.emission_box_extents = Vector3(20, 1, 20)
 	p.gravity = Vector3(0.4, -0.9, 0.2)

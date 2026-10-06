@@ -1,0 +1,146 @@
+{
+ "grass": {
+  "name": "Capim",
+  "stack": 40,
+  "fuel": 15,
+  "wisp": 10,
+  "icon": "grass"
+ },
+ "twig": {
+  "name": "Galho",
+  "stack": 40,
+  "fuel": 15,
+  "wisp": 25,
+  "icon": "twig"
+ },
+ "log": {
+  "name": "Tora",
+  "stack": 20,
+  "fuel": 45,
+  "icon": "log_s"
+ },
+ "rock": {
+  "name": "Pedra",
+  "stack": 40,
+  "icon": "rock_c"
+ },
+ "flint": {
+  "name": "Pederneira",
+  "stack": 40,
+  "icon": "flint"
+ },
+ "bone": {
+  "name": "Osso",
+  "stack": 40,
+  "icon": "bone_a"
+ },
+ "essence": {
+  "name": "Essência da Névoa",
+  "stack": 40,
+  "mana": 25,
+  "wisp": 50,
+  "icon": "essence"
+ },
+ "mushroom": {
+  "name": "Cogumelo-fantasma",
+  "stack": 20,
+  "hunger": 12,
+  "corruption": 3,
+  "spoil": 360,
+  "cooked": "mushroom_cooked",
+  "icon": "mushroom"
+ },
+ "mushroom_cooked": {
+  "name": "Cogumelo assado",
+  "stack": 20,
+  "hunger": 25,
+  "health": 3,
+  "spoil": 270,
+  "icon": "mushroom_cooked"
+ },
+ "berries": {
+  "name": "Frutinhas",
+  "stack": 20,
+  "hunger": 9,
+  "spoil": 270,
+  "cooked": "berries_cooked",
+  "icon": "berries"
+ },
+ "berries_cooked": {
+  "name": "Frutinhas assadas",
+  "stack": 20,
+  "hunger": 12,
+  "health": 2,
+  "spoil": 180,
+  "icon": "berries_cooked"
+ },
+ "axe": {
+  "name": "Machado",
+  "stack": 1,
+  "equip": "hand",
+  "tool": "axe",
+  "uses": 60,
+  "icon": "axe_1handed"
+ },
+ "pickaxe": {
+  "name": "Picareta",
+  "stack": 1,
+  "equip": "hand",
+  "tool": "pickaxe",
+  "uses": 40,
+  "icon": "pickaxe"
+ },
+ "torch": {
+  "name": "Tocha",
+  "stack": 1,
+  "equip": "hand",
+  "light": 8.0,
+  "burn": 90,
+  "icon": "torch"
+ },
+ "bone_staff": {
+  "name": "Cajado de Osso",
+  "stack": 1,
+  "equip": "hand",
+  "spell_damage": 1.8,
+  "spell_cost": 0.6,
+  "uses": 60,
+  "icon": "staff"
+ },
+ "grass_armor": {
+  "name": "Armadura de Grama",
+  "stack": 1,
+  "equip": "body",
+  "armor": 0.6,
+  "uses": 150,
+  "icon": "grass_armor"
+ },
+ "elixir": {
+  "name": "Elixir de Cura",
+  "stack": 10,
+  "health": 40,
+  "potion": true,
+  "icon": "bottle_A_green"
+ },
+ "mana_potion": {
+  "name": "Poção de Mana",
+  "stack": 10,
+  "mana": 60,
+  "potion": true,
+  "icon": "bottle_B_green"
+ },
+ "clarity_tonic": {
+  "name": "Tônico da Clareza",
+  "stack": 10,
+  "corruption": -40,
+  "potion": true,
+  "icon": "bottle_C_brown"
+ },
+ "rot": {
+  "name": "Comida Podre",
+  "stack": 40,
+  "hunger": 2,
+  "corruption": 10,
+  "icon": "rot"
+ }
+}

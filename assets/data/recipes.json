@@ -1,0 +1,18 @@
+{
+  "tabs": ["Ferramentas", "Luz", "Sobrevivência", "Estruturas", "Magia", "Alquimia"],
+  "tech": {"Magia": "altar", "Alquimia": "cauldron"},
+  "recipes": [
+    {"id": "axe", "tab": "Ferramentas", "cost": {"twig": 1, "flint": 1}},
+    {"id": "pickaxe", "tab": "Ferramentas", "cost": {"twig": 2, "flint": 2}},
+    {"id": "torch", "tab": "Luz", "cost": {"grass": 2, "twig": 2}},
+    {"id": "campfire", "tab": "Luz", "cost": {"grass": 3, "log": 2}, "structure": true, "name": "Fogueira"},
+    {"id": "grass_armor", "tab": "Sobrevivência", "cost": {"grass": 10, "twig": 2}},
+    {"id": "altar", "tab": "Estruturas", "cost": {"rock": 4, "log": 3, "flint": 2}, "structure": true, "name": "Altar Arcano"},
+    {"id": "cauldron", "tab": "Estruturas", "cost": {"rock": 3, "log": 2}, "structure": true, "name": "Caldeirão"},
+    {"id": "ward", "tab": "Magia", "cost": {"bone": 2, "twig": 1}, "structure": true, "name": "Ward de Ossos"},
+    {"id": "bone_staff", "tab": "Magia", "cost": {"bone": 3, "log": 2, "essence": 1}},
+    {"id": "elixir", "tab": "Alquimia", "cost": {"mushroom": 2, "berries": 1}},
+    {"id": "mana_potion", "tab": "Alquimia", "cost": {"mushroom": 1, "essence": 1}},
+    {"id": "clarity_tonic", "tab": "Alquimia", "cost": {"berries": 2, "essence": 1}}
+  ]
+}

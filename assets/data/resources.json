@@ -1,0 +1,10 @@
+{
+  "grass_tuft": {"name": "Tufo de capim", "hp": 1, "gives": {"grass": 1}, "regrow": 120},
+  "sapling":    {"name": "Muda", "hp": 1, "gives": {"twig": 1}, "regrow": 120},
+  "berry_bush": {"name": "Arbusto de frutinhas", "hp": 1, "gives": {"berries": 2}, "regrow": 150},
+  "mushroom":   {"name": "Cogumelo-fantasma", "hp": 1, "gives": {"mushroom": 1}},
+  "tree":       {"name": "Árvore", "hp": 4, "gives": {"log": 2}, "tool": "axe"},
+  "rock":       {"name": "Rocha", "hp": 4, "gives": {"rock": 2, "flint": 1}, "tool": "pickaxe"},
+  "page":       {"name": "Página do grimório", "hp": 1, "gives": {}},
+  "item":       {"name": "Item", "hp": 1, "gives": {}}
+}

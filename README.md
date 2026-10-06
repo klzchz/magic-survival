@@ -8,7 +8,7 @@ through the night, survive the **Blood Moon**, and gather **Mist Hearts** to
 reopen the Portal: the way back to the school.
 
 > Engine: **Godot 4.7** (GL Compatibility) · stylized low-poly look with CC0 KayKit models (see [`CREDITS.md`](CREDITS.md)).
-> Verified headless: **57/57 smoke checks green**.
+> Verified headless: **67/67 smoke checks green**.
 > Design vision (co-op for 4, magic schools, Wanderers): [`design/gdd/game-concept.md`](design/gdd/game-concept.md).
 >
 > Earlier versions are kept for history: the Godot 3.5 build in
@@ -82,28 +82,24 @@ nearest living apprentice, so Phase 2 (network co-op) only adds peers and RPCs.
 | Key | Action |
 | --- | --- |
 | `WASD` / arrows | Move (camera-relative) |
-| `Q` / `PageUp` | Rotate camera (Don't Starve style) |
-| `E` | Interact: pick up reagents/pages, chop trees (3 hits), mine rocks (2 hits), touch the Portal |
-| `1` | Eat (cooked first, then raw) |
-| `2` | Feed a twig to the wisp-light |
-| `3` | Improvised potion — 2 mushrooms (+30 hp, +corruption) |
-| `4` | Cook a mushroom (near a campfire) |
-| `5` | Craft campfire — 2 wood + 1 stone |
-| `6` | Craft bone ward — 2 bones + 1 twig (Shadows can't enter) |
-| `7` | Craft bone wand — 3 bones + 2 wood (stronger, cheaper bolts) |
-| `8` | Craft cauldron — 2 stones + 2 wood |
-| `9` | Cauldron elixir — 2 mushrooms (+50 hp, **no** corruption) |
-| `F` | Cast **LUME** (after learning it) |
-| `G` | Cast **ESCUDO** (after learning it) |
-| `Click` / `Space` | Bolt at the nearest Shadow |
+| `Q` / `PageUp` | Rotate camera |
+| `E` / `Space` | Act: pick, chop (axe), mine (pickaxe), grab loot, touch the Portal |
+| `F` / left click | Basic spell bolt |
+| `Z` / `X` | LUME / ESCUDO (after learning them) |
+| `1`-`0` / click slot | Use slot: eat, drink, equip, feed the wisp |
+| right click / `Shift`+number | Secondary: cook or add fuel at a burning fire, otherwise drop |
+| `Tab` | Toggle the crafting panel |
 | `R` | New island (after death or victory) |
+
+Survival loop, items, recipes and characters: [`design/gdd/survival-loop-mvp.md`](design/gdd/survival-loop-mvp.md).
+Data lives in [`assets/data/`](assets/data/) (items, recipes, characters, resources).
 
 ## Verification
 
 Headless smoke suite (no editor needed):
 
 ```sh
-godot4 --headless --path . -s tests/smoke.gd   # 57 checks, exits 0 on green
+godot4 --headless --path . -s tests/smoke.gd   # 67 checks, exits 0 on green
 ```
 
 Covers: world + ruins spawn, gather/chop/mine, eat/brew/cook, campfire,
