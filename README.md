@@ -23,6 +23,8 @@ reopen the Portal: the way back to the school.
 
 Or from a terminal: `godot4 --path .`
 
+**On WSL, play with `tools/play-windows.sh`**: WSLg renders on the CPU (llvmpipe) and stutters; the script mirrors the game to `C:\Users\lucas\Games\MagicalSurvive` and runs native Godot on the GPU.
+
 ## Studio workflow (Claude Code Game Studios)
 
 This repo runs the [Claude Code Game Studios](https://github.com/Donchitos/Claude-Code-Game-Studios)
