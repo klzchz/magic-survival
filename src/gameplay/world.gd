@@ -648,8 +648,8 @@ func _generate_world(seed_value := -1) -> void:
 	desert_center = Vector2(95, -88) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
 	var gate := gothic_center + (Vector2.ZERO - gothic_center).normalized() * 26.0
 	var d_entry := desert_center + (Vector2.ZERO - desert_center).normalized() * 30.0
-	lamp_road = [Vector2(-6, -6), Vector2(-28, -32) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), gate + (Vector2.ZERO - gate).normalized() * 30.0, gate]
-	waystone_path = [Vector2(6, -6), Vector2(30, -35) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), d_entry + (Vector2.ZERO - d_entry).normalized() * 28.0, d_entry]
+	lamp_road = [Vector2(-8, -8), Vector2(-28, -32) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), gate + (Vector2.ZERO - gate).normalized() * 30.0, gate]
+	waystone_path = [Vector2(8, -8), Vector2(30, -35) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), d_entry + (Vector2.ZERO - d_entry).normalized() * 28.0, d_entry]
 	north_road = [gothic_center + Vector2(24, -14), Vector2(0, -132) + Vector2(randf_range(-10, 10), 0), desert_center + Vector2(-28, -18)]
 	obelisk_pos = desert_center + Vector2(-8, -34)
 	buried_temple = desert_center + Vector2(30, 18)
@@ -935,8 +935,20 @@ func _build_gothic(c: Vector2, gate: Vector2) -> void:
 	for i in range(30):
 		var p := _wild_pos(2.0, "gothic")
 		Models.cull(Models.spawn(decor_root, ["gravestone", "grave_a", "grave_b", "gravemarker_a", "gravemarker_b", "grave_a_broken"].pick_random(), p, 1.0), 80.0)
-	for i in range(16):
+	for i in range(24):
 		Lanna.black_roses(decor_root, _wild_pos(2.0, "gothic"))
+	for i in range(70):  # dark hedges, ferns and wild grass between the ruins
+		var gp := _wild_pos(1.5, "gothic")
+		var hedge := Models.spawn(decor_root, ["qn_bush", "qn_fern", "qn_grass_wispy", "qn_plant_1"].pick_random(), gp, randf_range(0.9, 1.5))
+		Models.tint(hedge, Color(0.35, 0.45, 0.42))
+		Models.cull(hedge, 80.0)
+	for i in range(12):  # broken columns and fence remains along the way
+		var cp := _wild_pos(3.0, "gothic")
+		var piece := Models.spawn(decor_root, ["ruin_pillar", "fence_broken", "fence_post", "column"].pick_random(), cp, randf_range(0.9, 1.3))
+		if piece != null:
+			Models.tint(piece, Color(0.7, 0.7, 0.78))
+			piece.rotation.y = randf() * TAU
+			piece.set_meta("ruin", true)
 	for i in range(22):
 		var dt := Models.spawn(decor_root, ["dead_l", "dead_m", "dead_l_deco"].pick_random(), _wild_pos(4.0, "gothic"), randf_range(1.2, 1.8))
 		if dt != null:
@@ -962,15 +974,21 @@ func _build_desert(c: Vector2) -> void:
 	for k in range(6):  # crystal field
 		var cp := terrain.on_ground(Vector3(c.x - 34.0, 0, c.y + 8.0) + Vector3(randf_range(-10, 10), 0, randf_range(-10, 10)))
 		_solid(Lanna.crystals(decor_root, cp, randi_range(4, 8), [Color(0.45, 0.85, 1.0), Color(0.75, 0.5, 1.0)].pick_random()), 0.9)
-	for i in range(10):  # sandstone mesas
+	for i in range(18):  # sandstone mesas
 		var mp := _wild_pos(6.0, "desert")
 		var mesa := Models.spawn(decor_root, "qn_rock_" + str(randi_range(1, 3)), mp, randf_range(2.2, 3.8))
 		if mesa != null:
 			mesa.rotation.y = randf() * TAU
 			Models.tint(mesa, Color(1.35, 1.0, 0.72))
 			_solid(mesa, 2.6)
-	for i in range(14):
-		Models.cull(Models.spawn(decor_root, ["ribcage", "bone_c", "skull", "dead_s"].pick_random(), _wild_pos(2.0, "desert"), 1.0), 70.0)
+	for i in range(45):
+		var dp := _wild_pos(2.0, "desert")
+		var prop := Models.spawn(decor_root, ["ribcage", "bone_c", "dead_s", "dead_s", "qn_rock_2", "qn_pebble_2"].pick_random(), dp, randf_range(0.7, 1.4))
+		if prop != null and String(prop.name).begins_with("Rock"):
+			Models.tint(prop, Color(1.35, 1.0, 0.72))
+		Models.cull(prop, 80.0)
+	for i in range(10):  # lone crystal outcrops reward wandering off the path
+		_solid(Lanna.crystals(decor_root, _wild_pos(4.0, "desert"), randi_range(3, 5), [Color(0.45, 0.85, 1.0), Color(0.75, 0.5, 1.0)].pick_random()), 0.8)
 	for l in terrain.lakes.filter(func(x): return x.get("biome", "") == "desert"):
 		for k in range(3):  # bamboo and reeds ring the oasis
 			var a2 := randf() * TAU
@@ -1215,7 +1233,7 @@ func _stage_scene(scene: String) -> void:
 				_autopilot = true
 		"gothic", "desert":
 			var target: Vector2 = gothic_center if scene == "gothic" else desert_center
-			var from := target + (Vector2.ZERO - target).normalized() * 34.0
+			var from := target + (Vector2.ZERO - target).normalized() * 20.0
 			p.position = terrain.on_ground(Vector3(from.x, 0, from.y))
 			var look := (target - from).normalized()
 			camera_rig.angle = atan2(-look.x, -look.y)

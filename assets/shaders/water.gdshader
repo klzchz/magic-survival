@@ -6,6 +6,8 @@ uniform vec4 deep_color : source_color = vec4(0.04, 0.14, 0.2, 0.92);
 uniform vec4 shallow_color : source_color = vec4(0.22, 0.42, 0.45, 0.78);
 uniform vec4 sky_color : source_color = vec4(0.55, 0.62, 0.78, 1.0);
 uniform sampler2D ripples : repeat_enable, filter_linear_mipmap;
+uniform vec2 gloom_center = vec2(-95.0, -88.0);   // gothic ponds: dark, still water
+uniform float gloom_radius = 70.0;
 varying vec3 world_pos;
 
 void vertex() {
@@ -20,6 +22,8 @@ void fragment() {
 	vec3 col = mix(deep_color.rgb, shallow_color.rgb, smoothstep(0.35, 0.75, n));
 	col = mix(col, sky_color.rgb, fres * 0.55);
 	col += vec3(smoothstep(0.72, 0.8, n)) * 0.18;  // sparkle on ripple crests
+	float gloom = 1.0 - smoothstep(gloom_radius * 0.6, gloom_radius, distance(world_pos.xz, gloom_center));
+	col = mix(col, vec3(0.03, 0.05, 0.07) + col * 0.15, gloom * 0.85);
 	ALBEDO = col;
 	ALPHA = mix(deep_color.a, 0.97, fres);
 	ROUGHNESS = 0.06;

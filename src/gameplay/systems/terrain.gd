@@ -25,8 +25,8 @@ const TRAIL := Color(0.55, 0.42, 0.27)
 const GOTH_MOSS := Color(0.16, 0.21, 0.15)
 const GOTH_SLATE := Color(0.24, 0.24, 0.27)
 const COBBLE := Color(0.33, 0.32, 0.34)
-const DUNE := Color(0.86, 0.72, 0.47)
-const SAND_DARK := Color(0.74, 0.57, 0.36)
+const DUNE := Color(0.74, 0.58, 0.36)
+const SAND_DARK := Color(0.56, 0.4, 0.25)
 const SANDSTONE := Color(0.7, 0.5, 0.36)
 const BIOMES := ["flowered", "gothic", "desert"]
 
@@ -219,7 +219,7 @@ func _ground_color(x: float, z: float, h: float, slope: float) -> Color:
 	var flower := _flower_color(x, z, h, slope, t)
 	var goth := GOTH_MOSS.lerp(GOTH_SLATE, smoothstep(0.4, 0.8, t)).lerp(GOTH_SLATE.darkened(0.2), smoothstep(0.5, 0.9, slope))
 	var ripple := sin(x * 0.9 + z * 0.35 + _detail.get_noise_2d(x, z) * 3.0) * 0.5 + 0.5
-	var desert := DUNE.lerp(SAND_DARK, ripple * 0.35 + smoothstep(0.55, 0.85, t) * 0.3).lerp(SANDSTONE, smoothstep(0.5, 0.85, slope))
+	var desert := DUNE.lerp(SAND_DARK, ripple * 0.45 + smoothstep(0.55, 0.85, t) * 0.35).lerp(SANDSTONE, smoothstep(0.5, 0.85, slope))
 	var c := flower * m.x + goth * m.y + desert * m.z
 	for path in paths:  # roads take the local material: earth, cobbles, packed sand
 		var dp := path_distance(Vector2(x, z), path)
@@ -311,6 +311,8 @@ func _build_water() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = WATER_SHADER
 	mat.set_shader_parameter("ripples", _noise_texture(0.05))
+	if biome_seeds.has("gothic"):
+		mat.set_shader_parameter("gloom_center", biome_seeds.gothic)
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
 	mi.material_override = mat
