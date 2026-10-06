@@ -109,3 +109,17 @@ static func bamboo(parent: Node3D, pos: Vector3, culms := 7) -> Node3D:
 			var l := Art.add_mesh(culm, Art.box(Vector3(0.9, 0.03, 0.18)), leaf, Vector3(0, h - k * 0.45, 0))
 			l.rotation = Vector3(0.3, randf() * TAU, -0.5)
 	return root
+
+
+## A cut log lying on its side (bark, pale end rings). length in metres.
+static func log_piece(parent: Node3D, pos: Vector3, length := 1.2, radius := 0.18, yaw := 0.0) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	root.rotation.y = yaw
+	parent.add_child(root)
+	var bark := Art.add_mesh(root, Art.cylinder(radius, radius * 1.05, length), Art.mat(Color(0.36, 0.24, 0.15)), Vector3(0, radius, 0))
+	bark.rotation.z = PI / 2.0
+	for side in [-1.0, 1.0]:
+		var ring := Art.add_mesh(root, Art.cylinder(radius * 0.92, radius * 0.92, 0.02), Art.mat(Color(0.78, 0.62, 0.42)), Vector3(side * length * 0.5, radius, 0))
+		ring.rotation.z = PI / 2.0
+	return root

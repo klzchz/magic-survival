@@ -7,6 +7,7 @@ extends RefCounted
 
 const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
+const Lanna = preload("res://src/core/lanna.gd")
 
 
 static func build(parent: Node3D, key: String) -> Node3D:
@@ -55,10 +56,30 @@ static func build(parent: Node3D, key: String) -> Node3D:
 			Art.add_mesh(root, Art.sphere(0.22, 0.3), Art.mat(Color(0.3, 0.32, 0.18)), Vector3(0, 0.12, 0))
 		"campfire":
 			for i in range(3):
-				var lg := Models.spawn(root, "log_s", Vector3.ZERO, 0.8)
-				if lg != null:
-					lg.rotation.y = TAU * i / 3.0
+				Lanna.log_piece(root, Vector3.ZERO, 1.0, 0.11, TAU * i / 3.0)
 			Art.add_mesh(root, Art.cylinder(0.05, 0.3, 0.45), Art.emissive(Color(1.0, 0.55, 0.15), Color(1.0, 0.45, 0.1)), Vector3(0, 0.3, 0))
+		"log":
+			Lanna.log_piece(root, Vector3.ZERO, 1.0, 0.16, 0.5)
+		"wand", "wand_naga", "wand_hongsa":
+			var w := Models.spawn(root, "wand", Vector3.ZERO, 1.0)
+			if w == null:
+				Art.add_mesh(root, Art.cylinder(0.03, 0.05, 1.0), Art.mat(Color(0.45, 0.32, 0.2)), Vector3(0, 0.5, 0))
+			if key != "wand":
+				var core := Color(0.2, 0.85, 0.6) if key == "wand_naga" else Color(0.85, 0.9, 1.0)
+				Art.add_mesh(root, Art.sphere(0.11, 0.22), Art.emissive(core, core), Vector3(0, 0.95, 0))
+		"core_naga":
+			var scale := PrismMesh.new()
+			scale.size = Vector3(0.4, 0.5, 0.12)
+			Art.add_mesh(root, scale, Art.emissive(Color(0.15, 0.7, 0.55), Color(0.1, 0.6, 0.45)), Vector3(0, 0.25, 0))
+		"core_hongsa":
+			var feather := Art.add_mesh(root, Art.sphere(0.12, 0.7), Art.emissive(Color(0.95, 0.95, 1.0), Color(0.6, 0.7, 1.0)), Vector3(0, 0.35, 0))
+			feather.scale = Vector3(1.0, 1.0, 0.25)
+			feather.rotation.z = 0.4
+		"talisman_guard", "talisman_hush":
+			var col := Color(0.95, 0.75, 0.3) if key == "talisman_guard" else Color(0.55, 0.75, 1.0)
+			var disc := Art.add_mesh(root, Art.cylinder(0.28, 0.28, 0.06), Art.emissive(col, col * 0.5), Vector3(0, 0.3, 0))
+			disc.rotation.x = PI / 2.0
+			Art.add_mesh(root, Art.cylinder(0.02, 0.02, 0.4), Art.mat(Color(0.8, 0.15, 0.15)), Vector3(0, 0.6, 0))
 		"altar":
 			Models.spawn(root, "shrine")
 		"ward":

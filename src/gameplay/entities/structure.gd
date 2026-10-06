@@ -7,6 +7,7 @@ const Cfg = preload("res://src/core/config.gd")
 const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
 const Fx = preload("res://src/core/fx.gd")
+const Lanna = preload("res://src/core/lanna.gd")
 
 const FIRE_START := 120.0  # seconds of fuel a new campfire starts with
 const FIRE_MAX := 240.0
@@ -36,11 +37,8 @@ func _ready() -> void:
 				var a := TAU * i / 7.0
 				if Models.spawn_variant(self, "rock", Vector3(cos(a), 0, sin(a)) * 0.95, 0.45) == null:
 					Art.add_mesh(self, Art.sphere(0.18, 0.22), Art.mat(Color(0.4, 0.4, 0.42)), Vector3(cos(a), 0.08, sin(a)) * 0.95)
-			for i in range(3):
-				var log_node := Models.spawn(self, "log_s", Vector3.ZERO, 0.9)
-				if log_node == null:
-					log_node = Art.add_mesh(self, Art.cylinder(0.12, 0.12, 1.0), Art.mat(Color(0.35, 0.22, 0.12)), Vector3(0, 0.12, 0))
-				log_node.rotation.y = TAU * i / 3.0
+			for i in range(3):  # crossed logs
+				Lanna.log_piece(self, Vector3.ZERO, 1.1, 0.12, TAU * i / 3.0)
 			flames = Fx.flames(self, Vector3(0, 0.45, 0))
 			light = Art.add_light(self, Color(1.0, 0.6, 0.25), Cfg.FIRE_RADIUS, 1.8, Vector3(0, 1.6, 0))
 		"altar":

@@ -19,7 +19,7 @@
   "name": "Tora",
   "stack": 20,
   "fuel": 45,
-  "icon": "log_s",
+  "icon": "log",
   "desc": "Madeira para fogueira, Altar, Caldeirão e cabana. Ótimo combustível (+45 s)."
  },
  "rock": {

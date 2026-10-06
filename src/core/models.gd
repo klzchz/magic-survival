@@ -50,6 +50,7 @@ const CATALOG := {
 	"spellbook": ["props/spellbook_open.gltf", 1.0],
 	"axe_1handed": ["props/axe_1handed.gltf", 1.0],
 	"staff": ["props/staff.gltf", 1.0],
+	"wand": ["props/wand.gltf", 1.0],
 	"bottle_A_green": ["dungeon/bottle_A_green.glb", 1.0],
 	"bottle_B_green": ["dungeon/bottle_B_green.glb", 1.0],
 	"bottle_C_brown": ["dungeon/bottle_C_brown.glb", 1.0],

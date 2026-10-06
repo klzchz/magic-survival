@@ -59,6 +59,9 @@ var old_trail: Array = []           # old trail to the Temple of the Portal
 var objective_step := 0             # first-steps chain (see OBJECTIVES)
 var obj_flags := {}                 # tool_made, reached_shrine, found_page
 var _obj_done_t := 0.0              # shows "Concluído" briefly between steps
+var _autopilot := false             # dev: walk the Lantern Trail and hop (movement video)
+var _auto_i := 1
+var _auto_jump_t := 1.5
 var placing := ""          # structure recipe being placed (preview mode)
 var place_ok := false
 var place_why := ""
@@ -414,7 +417,7 @@ func objective_info() -> Dictionary:
 		"tool":
 			return {"title": "Fabrique uma ferramenta (Tab)", "text": "Machado: 1 galho + 1 pederneira (pederneira fica no chão)", "fresh": _obj_done_t > 0.0}
 		"fire":
-			return {"title": "Prepare uma fogueira", "text": "Tab > Luz > Fogueira: 3 capim + 2 toras (corte árvores com o machado)", "fresh": _obj_done_t > 0.0}
+			return {"title": "Prepare uma fogueira", "text": "Tab › Luz › Fogueira: 3 capim + 2 toras (corte árvores)", "fresh": _obj_done_t > 0.0}
 		"shrine":
 			var dist := Vector2(p.position.x, p.position.z).distance_to(shrine_center)
 			return {"title": "Siga a Trilha das Lanternas", "text": "Santuário da Naga Adormecida: faltam %d m" % int(dist), "fresh": _obj_done_t > 0.0}
@@ -675,9 +678,7 @@ func _solid(node: Node3D, radius: float) -> void:
 ## the way out to the Lantern Trail, and a starter kit to learn the loop.
 func _build_clearing(dir: Vector2) -> void:
 	_solid(Lanna.lantern_post(decor_root, terrain.on_ground(Vector3(-2.5, 0, -2.5))).get_parent(), 0.4)
-	var seat := Models.spawn(decor_root, "log_m", terrain.on_ground(Vector3(-3.5, 0, 0.5)), 1.6)
-	if seat != null:
-		seat.rotation.y = 0.6
+	_solid(Lanna.log_piece(decor_root, terrain.on_ground(Vector3(-3.8, 0, 0.6)), 2.4, 0.32, 0.6), 0.6)
 	for i in range(18):  # fern ring, open toward the trail
 		var a := TAU * i / 18.0
 		var v := Vector2(cos(a), sin(a))
@@ -897,6 +898,21 @@ func tick(delta: float) -> void:
 
 func _drive_local(delta: float) -> void:
 	var mv := Vector3.ZERO
+	if _autopilot:
+		var pts: Array = trail + [shrine_center]
+		if _auto_i < pts.size():
+			var goal: Vector2 = pts[_auto_i]
+			var to := goal - Vector2(local_player.position.x, local_player.position.z)
+			if to.length() < 2.0:
+				_auto_i += 1
+			mv = Vector3(to.x, 0, to.y).normalized()
+			camera_rig.angle = lerp_angle(camera_rig.angle, atan2(-mv.x, -mv.z), 1.5 * delta)
+		_auto_jump_t -= delta
+		if _auto_jump_t <= 0.0:
+			_auto_jump_t = 2.2
+			local_player.jump()
+		local_player.move(mv, delta)
+		return
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 		mv += camera_rig.forward()
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
@@ -999,6 +1015,20 @@ func _stage_scene(scene: String) -> void:
 		"camp":
 			give(p, {"grass": 6, "log": 4, "rock": 6, "flint": 4, "twig": 6})
 			craft(p, "campfire")
+		"trail", "walk":
+			# stand on the Lantern Trail looking toward the shrine
+			var t0: Vector2 = trail[0]
+			var tdir := (shrine_center - t0).normalized()
+			p.position = terrain.on_ground(Vector3(t0.x, 0, t0.y) + Vector3(tdir.x, 0, tdir.y) * 2.0)
+			camera_rig.angle = atan2(-tdir.x, -tdir.y)
+			camera_rig._snapped = false
+			if scene == "walk":
+				_autopilot = true
+		"shrine":
+			var sd := shrine_center.normalized()
+			p.position = terrain.on_ground(Vector3(shrine_center.x, 0, shrine_center.y) - Vector3(sd.x, 0, sd.y) * 9.0)
+			camera_rig.angle = atan2(-sd.x, -sd.y)
+			camera_rig._snapped = false
 		"place":
 			give(p, {"grass": 3, "log": 2})
 			hud.toggle_crafting()
