@@ -1,0 +1,15 @@
+{
+  "amplitude": 3.2,
+  "frequency": 0.022,
+  "detail_amplitude": 0.5,
+  "detail_frequency": 0.09,
+  "water_level": -0.6,
+  "wade_depth": 0.25,
+  "lakes": 4,
+  "lake_radius": [7.0, 12.0],
+  "lake_depth": 2.6,
+  "flat_spawn_radius": 9.0,
+  "grass_blades": 9000,
+  "grid_step": 1.0,
+  "border_rise": 0.45
+}

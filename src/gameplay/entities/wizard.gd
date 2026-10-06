@@ -37,6 +37,7 @@ var shield_t := 0.0        # seconds of Escudo remaining
 var dark_t := 0.0          # seconds spent in total darkness at night
 var dead := false
 var wisp_light: OmniLight3D
+var terrain = null         # set by the world: ground height + lakes
 var model: Node3D
 var rig: Rig
 var wisp_orb: Node3D
@@ -204,9 +205,14 @@ func move(dir: Vector3, delta: float) -> void:
 		rig.set_base("Running_A")
 	if model != null:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(dir.x, dir.z), minf(1.0, 12.0 * delta))
-	position += dir.normalized() * Cfg.SPEED * delta
-	position.x = clampf(position.x, -Cfg.WORLD, Cfg.WORLD)
-	position.z = clampf(position.z, -Cfg.WORLD, Cfg.WORLD)
+	var next := position + dir.normalized() * Cfg.SPEED * delta
+	next.x = clampf(next.x, -Cfg.WORLD, Cfg.WORLD)
+	next.z = clampf(next.z, -Cfg.WORLD, Cfg.WORLD)
+	if terrain != null:
+		if not terrain.is_walkable(next.x, next.z):
+			return  # lakes block the way (the shallow edge can be waded)
+		next.y = terrain.height_at(next.x, next.z)
+	position = next
 
 
 func hurt(dps: float, delta: float) -> void:

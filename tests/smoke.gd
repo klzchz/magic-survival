@@ -88,6 +88,33 @@ func _initialize() -> void:
 	_check(p.inventory.count("mushroom") == 2 and p.inventory.count("elixir") == 1, "Aldric's starting items")
 	_force_day(w)
 
+	# ---------- terrain: relief, lakes, everything on the ground ----------
+	var ter = w.terrain
+	_check(ter.lakes.size() >= 2, "the island has lakes")
+	var lake: Dictionary = ter.lakes[0]
+	var lc: Vector2 = lake.center
+	_check(ter.is_water(lc.x, lc.y) and not ter.is_walkable(lc.x, lc.y), "a lake centre is water and can't be walked")
+	_check(absf(ter.height_at(0, 0)) < 0.05 and absf(ter.height_at(w._ruins_center().x, w._ruins_center().z)) < 0.05, "spawn and ruins clearings are flat")
+	var on_ground := true
+	for g in w.resources():
+		if absf(g.position.y - ter.height_at(g.position.x, g.position.z)) > 0.01:
+			on_ground = false
+	_check(on_ground, "every resource stands on the ground")
+	var relief := 0.0
+	for i in range(40):
+		relief = maxf(relief, absf(ter.height_at(randf_range(-50, 50), randf_range(-50, 50))))
+	_check(relief > 1.0, "the island has real relief (hills and basins)")
+	var shore := Vector3(lc.x + lake.radius + 6.0, 0, lc.y)
+	var walker = w.add_player(9, "aldric")
+	walker.position = ter.on_ground(shore)
+	for _i in range(80):  # walk straight at the lake
+		walker.move(Vector3(-1, 0, 0), 0.05)
+	_check(ter.is_walkable(walker.position.x, walker.position.z), "walking into a lake stops at the shore")
+	_check(absf(walker.position.y - ter.height_at(walker.position.x, walker.position.z)) < 0.01, "apprentices follow the ground height")
+	w._despawn(walker)
+	var grass = ter.find_child("Grass", true, false)
+	_check(grass != null and grass.multimesh.instance_count > 3000, "dense grass field (MultiMesh)")
+
 	# ---------- gather by hand, regrow ----------
 	# each tested node is moved to an isolated spot so neighbours never interfere
 	var tuft = w.resources_of("grass_tuft")[0]

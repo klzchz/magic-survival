@@ -77,8 +77,9 @@ func _ready() -> void:
 	_build_inventory(root)
 	_build_crafting(root)
 
-	lbl_msg = _label(root, "", Vector2(0, 572), 20, title_font)
-	lbl_msg.size = Vector2(1280, 40)
+	lbl_msg = _label(root, "", Vector2(240, 548), 20, title_font)
+	lbl_msg.size = Vector2(800, 60)
+	lbl_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	lbl_msg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
 	lbl_msg.visible = false
@@ -334,12 +335,12 @@ func _process(delta: float) -> void:
 			lbl_msg.visible = false
 
 
-func flash(m: String) -> void:
+func flash(m: String, seconds := 2.6) -> void:
 	if m == "":
 		return
 	lbl_msg.text = m
 	lbl_msg.visible = true
-	msg_t = 2.6
+	msg_t = seconds
 
 
 func show_end(text: String) -> void:

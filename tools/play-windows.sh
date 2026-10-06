@@ -17,6 +17,8 @@ GAME_WIN="$(wslpath -w "$WIN/game")"
 "$CONSOLE" --headless --path "$GAME_WIN" --import >/dev/null 2>&1 || true
 if [[ "${1:-}" == "--import-only" ]]; then exit 0; fi
 cd "$WIN"
+# pass dev hooks (MAGIC_SHOT, MAGIC_SHOT_AT, MAGIC_TIME, MAGIC_CHAR) through to Windows
+export WSLENV="${WSLENV:-}:MAGIC_SHOT/u:MAGIC_SHOT_AT/u:MAGIC_TIME/u:MAGIC_CHAR/u"
 "$EXE" --path "$GAME_WIN" >/dev/null 2>&1 &
 disown
 echo "Magical Survive launched on Windows (GPU)."

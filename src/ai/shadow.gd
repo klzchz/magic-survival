@@ -93,7 +93,7 @@ func tick(delta: float, world, lit: float, _clock: float) -> void:
 		if model != null:
 			model.rotation.y = atan2(to_p.x, to_p.z)
 	p = world.apply_wards(p)
-	p.y = hover_height()
+	p.y = world.terrain.height_at(p.x, p.z) + hover_height()
 	position = p
 	var reach := 2.4 if boss else 1.4
 	if d < reach:

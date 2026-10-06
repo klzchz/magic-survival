@@ -12,6 +12,7 @@ const Models = preload("res://src/core/models.gd")
 const Fx = preload("res://src/core/fx.gd")
 const Data = preload("res://src/core/data.gd")
 const MetaSave = preload("res://src/core/meta_save.gd")
+const Terrain = preload("res://src/gameplay/systems/terrain.gd")
 const Inventory = preload("res://src/gameplay/inventory.gd")
 const WizardScene = preload("res://scenes/wizard.tscn")
 const ShadowScene = preload("res://scenes/shadow.tscn")
@@ -51,6 +52,7 @@ var ambient: Node3D        # follows the local apprentice: fireflies + leaves
 var fireflies: CPUParticles3D
 var leaves: CPUParticles3D
 var select_screen = null
+var terrain: Terrain
 var state := "menu"        # menu · select · playing · paused · ended
 var menu = null            # the open OverlayMenu, if any
 var _menu_return := ""     # where "Voltar" from Controles goes
@@ -188,11 +190,11 @@ func start_game(character: String) -> void:
 	won = false
 	game_over = false
 	day_night.reset()
+	_generate_world()  # terrain first: apprentices spawn on its ground
 	local_player = add_player(1, character)
 	camera_rig.target = local_player
 	hud.visible = true
 	hud.hide_end()
-	_generate_world()
 	started = true
 	# dev: MAGIC_TIME=<seconds> starts the clock later (e.g. 58 = first night)
 	if OS.get_environment("MAGIC_TIME") != "":
@@ -203,71 +205,9 @@ func start_game(character: String) -> void:
 # ---------- scenery (built once: ground, grass, the forest wall) ----------
 
 func _build_scenery() -> void:
-	var scenery := Node3D.new()
-	scenery.name = "Scenery"
-	add_child(scenery)
-
-	# mossy ground with autumn patches (noise texture, no image files)
-	var noise := FastNoiseLite.new()
-	noise.frequency = 0.012
-	noise.fractal_octaves = 4
-	var ramp := Gradient.new()
-	ramp.set_color(0, Color(0.10, 0.17, 0.09))
-	ramp.set_color(1, Color(0.30, 0.24, 0.13))
-	ramp.add_point(0.45, Color(0.15, 0.25, 0.11))
-	ramp.add_point(0.72, Color(0.22, 0.27, 0.12))
-	var tex := NoiseTexture2D.new()
-	tex.width = 512
-	tex.height = 512
-	tex.seamless = true
-	tex.noise = noise
-	tex.color_ramp = ramp
-	var ground_mat := StandardMaterial3D.new()
-	ground_mat.albedo_texture = tex
-	ground_mat.roughness = 1.0
-	ground_mat.uv1_scale = Vector3(3, 3, 3)
-	var ground := PlaneMesh.new()
-	var extent := Cfg.WORLD * 2.0 + 60.0
-	ground.size = Vector2(extent, extent)
-	Art.add_mesh(scenery, ground, ground_mat)
-
-	# grass tufts (one MultiMesh draw call)
-	var blade := PrismMesh.new()
-	blade.size = Vector3(0.12, 0.55, 0.05)
-	var grass_mat := StandardMaterial3D.new()
-	grass_mat.vertex_color_use_as_albedo = true
-	grass_mat.roughness = 1.0
-	blade.material = grass_mat
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.mesh = blade
-	mm.instance_count = 2400
-	for i in range(mm.instance_count):
-		var b := Basis(Vector3.UP, randf() * TAU).scaled(Vector3.ONE * randf_range(0.6, 1.4))
-		b = b.rotated(Vector3(1, 0, 0), randf_range(-0.25, 0.25))
-		mm.set_instance_transform(i, Transform3D(b, Vector3(randf_range(-Cfg.WORLD, Cfg.WORLD), 0.25, randf_range(-Cfg.WORLD, Cfg.WORLD))))
-		mm.set_instance_color(i, Color(0.25, 0.42, 0.18).lerp(Color(0.6, 0.5, 0.2), randf() * 0.6))
-	var grass := MultiMeshInstance3D.new()
-	grass.multimesh = mm
-	grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	scenery.add_child(grass)
-
-	# the forest wall: dense trees and mountains just outside the playable square
-	var edge := Cfg.WORLD + 4.0
-	var step := 6.0
-	var t := -edge
-	while t <= edge:
-		for side in [Vector3(t, 0, -edge), Vector3(t, 0, edge), Vector3(-edge, 0, t), Vector3(edge, 0, t)]:
-			var jitter := Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))
-			Models.spawn_variant(scenery, "border_tree", side + jitter, randf_range(1.1, 1.5))
-		t += step
-	# a second, darker ring of pines so the forest feels deep (hex-tile hills/mountains dropped: they read as board pieces)
-	t = -edge - 8.0
-	while t <= edge + 8.0:
-		for side in [Vector3(t, 0, -edge - 8.0), Vector3(t, 0, edge + 8.0), Vector3(-edge - 8.0, 0, t), Vector3(edge + 8.0, 0, t)]:
-			Models.spawn_variant(scenery, "border_tree", side + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2)), randf_range(1.3, 1.8))
-		t += 8.0
+	terrain = Terrain.new()
+	terrain.name = "Terrain"
+	add_child(terrain)
 
 
 # ---------- queries (untyped arrays so callers can duck-type entities) ----------
@@ -369,13 +309,14 @@ func add_player(peer_id: int, character := DEFAULT_CHARACTER):
 	w.slot = players_root.get_child_count()
 	w.name = "Wizard%d" % peer_id
 	w.setup(character)
+	w.terrain = terrain
 	players_root.add_child(w)
 	w.respawn(_spawn_spot(w.slot), meta.knows("eco"))
 	return w
 
 
 func _spawn_spot(slot: int) -> Vector3:
-	return Vector3(slot * 2.0, 0, 0)
+	return terrain.on_ground(Vector3(slot * 2.0, 0, 0))
 
 
 func spawn_shadow(boss := false):
@@ -387,7 +328,7 @@ func spawn_shadow(boss := false):
 	pos.z = clampf(pos.z, -Cfg.WORLD, Cfg.WORLD)
 	var s = ShadowScene.instantiate()
 	s.setup(boss)
-	pos.y = s.hover_height()
+	pos.y = terrain.height_at(pos.x, pos.z) + s.hover_height()
 	s.position = pos
 	shadows_root.add_child(s)
 	return s
@@ -396,7 +337,7 @@ func spawn_shadow(boss := false):
 func spawn_structure(kind: String, pos: Vector3, burn_mult := 1.0):
 	var s = StructureScene.instantiate()
 	s.setup(kind, burn_mult)
-	s.position = pos
+	s.position = terrain.on_ground(pos)
 	structures_root.add_child(s)
 	return s
 
@@ -404,7 +345,7 @@ func spawn_structure(kind: String, pos: Vector3, burn_mult := 1.0):
 func _spawn_resource(kind: String, pos: Vector3):
 	var g = GatherableScene.instantiate()
 	g.setup(kind)
-	g.position = pos
+	g.position = terrain.on_ground(pos)
 	resources_root.add_child(g)
 	return g
 
@@ -413,7 +354,7 @@ func _spawn_resource(kind: String, pos: Vector3):
 func spawn_item(id: String, count: int, pos: Vector3, stack := {}):
 	var g = GatherableScene.instantiate()
 	g.setup_item(id, count, stack)
-	g.position = Vector3(pos.x, 0.0, pos.z)
+	g.position = terrain.on_ground(pos)
 	resources_root.add_child(g)
 	return g
 
@@ -434,7 +375,7 @@ func _despawn(n: Node) -> void:
 
 
 func _rand_pos() -> Vector3:
-	return Vector3(randf_range(-Cfg.WORLD + 3.0, Cfg.WORLD - 3.0), 0.0, randf_range(-Cfg.WORLD + 3.0, Cfg.WORLD - 3.0))
+	return terrain.random_land_pos(3.0)
 
 
 func _ruins_center() -> Vector3:
@@ -444,7 +385,7 @@ func _ruins_center() -> Vector3:
 func _ruins_pos() -> Vector3:
 	var ang := randf_range(0.0, TAU)
 	var r := randf_range(2.5, Cfg.RUINS_RADIUS)
-	return _ruins_center() + Vector3(cos(ang) * r, 0.0, sin(ang) * r)
+	return terrain.on_ground(_ruins_center() + Vector3(cos(ang) * r, 0.0, sin(ang) * r))
 
 
 func _generate_world() -> void:
@@ -452,6 +393,8 @@ func _generate_world() -> void:
 		for n in root.get_children():
 			_despawn(n)
 	portal = null
+	var rc := _ruins_center()
+	terrain.generate([{"center": Vector2.ZERO, "radius": 9.0}, {"center": Vector2(rc.x, rc.z), "radius": Cfg.RUINS_RADIUS + 3.0}])
 
 	for i in range(48):
 		var pos := _rand_pos()
@@ -485,7 +428,7 @@ func _generate_world() -> void:
 			piece = Art.add_mesh(decor_root, Art.cylinder(0.5, 0.6, 4.0), pillar_mat, _ruins_pos() + Vector3(0, 2.0, 0))
 			piece.rotation_degrees.z = randf_range(-14.0, 14.0)
 		piece.set_meta("ruin", true)
-	var crypt := Models.spawn(decor_root, "crypt", _ruins_center() + Vector3(-9.0, 0, -9.0))
+	var crypt := Models.spawn(decor_root, "crypt", terrain.on_ground(_ruins_center() + Vector3(-9.0, 0, -9.0)))
 	if crypt != null:
 		crypt.rotation.y = PI * 0.25
 		crypt.set_meta("ruin", true)
@@ -507,7 +450,7 @@ func _generate_world() -> void:
 	for i in range(3):
 		_spawn_resource("page", _ruins_pos())
 	portal = PortalScene.instantiate()
-	portal.position = _ruins_center()
+	portal.position = terrain.on_ground(_ruins_center())
 	decor_root.add_child(portal)
 
 
@@ -517,6 +460,7 @@ func restart() -> void:
 	won = false
 	game_over = false
 	day_night.reset()
+	_generate_world()
 	for p in players():
 		p.respawn(_spawn_spot(p.slot), meta.knows("eco"))
 	hud.hide_end()
@@ -635,6 +579,8 @@ func _on_night_start(blood_moon: bool) -> void:
 	if blood_moon:
 		_announce("LUA DE SANGUE! Algo grande caça vocês esta noite.")
 		spawn_shadow(true)
+	elif day_night.nights == 0:
+		hud.flash("A primeira noite! Sombras surgem da escuridão e caçam você. A LUZ as queima: fique perto do fogo-fátuo, de uma tocha ou de uma fogueira. Sem luz nenhuma, a própria Névoa fere.", 9.0)
 	else:
 		_announce("A Névoa desce. Fique perto da luz.")
 
