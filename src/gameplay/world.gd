@@ -800,7 +800,7 @@ func _good_spot(p: Vector3, biome: String, trail_gap := 3.0) -> bool:
 		return false
 	if terrain.slope(p.x, p.z) > 0.9 or terrain.on_trail(p.x, p.z, trail_gap):
 		return false
-	if Vector2(p.x, p.z).distance_to(temple_center) < 25.0:
+	if _in_temple(p):
 		return false
 	return true
 
@@ -816,7 +816,13 @@ func _near_pos(c: Vector3, spread: float, biome: String) -> Vector3:
 ## Like _wild_spot, but always returns a land position (decor placement).
 func _wild_pos(trail_gap := 3.0, biome := "flowered") -> Vector3:
 	var p := _wild_spot(trail_gap, biome)
-	return _rand_pos() if p == Vector3.INF else p
+	if p != Vector3.INF:
+		return p
+	for _i in range(30):  # fallback: anywhere on land, but never inside the temple
+		var q := _rand_pos()
+		if Vector2(q.x, q.z).distance_to(temple_center) > 25.0:
+			return q
+	return _rand_pos()
 
 
 ## A random gentle spot in a biome that keeps roads, clearings and landmarks
@@ -1038,6 +1044,11 @@ func _tick_dungeons(delta: float) -> void:
 		hud.set_boss(g2.display_name() if g2 != null else "", g2.hp if g2 != null else 0.0, g2.hp_max if g2 != null else 1.0)
 
 
+## True inside the School-Temple's grounds (nothing wild grows there).
+func _in_temple(p: Vector3) -> bool:
+	return Vector2(p.x, p.z).distance_to(temple_center) < 24.0
+
+
 ## Woods, not noise: clusters of trees with undergrowth, a few lone trees,
 ## and bamboo groves near water; trails and clearings stay open.
 func _build_forest() -> void:
@@ -1045,12 +1056,12 @@ func _build_forest() -> void:
 		var center := _wild_pos(7.0, "flowered")
 		for k in range(randi_range(4, 7)):
 			var p := terrain.on_ground(center + Vector3(randf_range(-6, 6), 0, randf_range(-6, 6)))
-			if terrain.on_trail(p.x, p.z, 4.0) or p.length() < 10.0 or terrain.is_water(p.x, p.z):
+			if terrain.on_trail(p.x, p.z, 4.0) or p.length() < 10.0 or terrain.is_water(p.x, p.z) or _in_temple(p):
 				continue
 			_spawn_resource("tree", p)
 		for k in range(randi_range(3, 6)):
 			var u := terrain.on_ground(center + Vector3(randf_range(-7, 7), 0, randf_range(-7, 7)))
-			if not terrain.on_trail(u.x, u.z, 1.5) and not terrain.is_water(u.x, u.z):
+			if not terrain.on_trail(u.x, u.z, 1.5) and not terrain.is_water(u.x, u.z) and not _in_temple(u):
 				Models.spawn_variant(decor_root, "undergrowth", u, randf_range(0.8, 1.3))
 	for i in range(12):
 		_spawn_resource("tree", _wild_pos(5.0, "flowered"))
@@ -1336,7 +1347,7 @@ func tick(delta: float) -> void:
 
 func _drive_local(delta: float) -> void:
 	var mv := Vector3.ZERO
-	if map_open():
+	if map_open() or hud.typing():
 		local_player.move(Vector3.ZERO, delta)
 		return
 	if _autopilot and (Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D)
@@ -1496,6 +1507,23 @@ func _stage_scene(scene: String) -> void:
 				_damage_guardian(p, guardians()[0], 9999.0)
 				exploration.reveal(p.position, 40.0)
 				toggle_map()
+		"hud":
+			# the HUD under load: dusk, shield up, loud, beside a fire, gear worn
+			give(p, {"grass": 6, "log": 4, "twig": 4, "flint": 2, "berries": 3, "torch": 1, "essence": 1})
+			craft(p, "campfire")
+			if placing != "":
+				confirm_placement()
+			day_night.t = Cfg.DAY_LENGTH * 0.42
+			p.shield_t = 4.0
+			p.noise = 68.0
+			p.hunger = p.hunger_max * 0.2
+			p.health = p.health_max * 0.62
+			p.spell_cd["bolt"] = 0.4
+			for i in range(Inventory.SIZE):
+				var s = p.inventory.slots[i]
+				if s != null and s.id == "torch":
+					p.use_slot(i)
+					break
 		"gather", "nogear":
 			# the interaction prompt over the nearest straw / tree, a gain pop-up
 			# and the Light tab with live ingredient counts
@@ -2102,12 +2130,28 @@ func _try_portal(p) -> void:
 	_show_end_menu(true)
 
 
+## Spell recharge (spells.json "cooldown"): false + a reason while recharging.
+func _spell_ready(p, id: String) -> bool:
+	var left := float(p.spell_cd.get(id, 0.0))
+	if left > 0.0:
+		_deny(p, "%s recarregando (%.1f s)" % [Data.spell(id).get("name", id), left])
+		return false
+	return true
+
+
+func _spell_used(p, id: String) -> void:
+	p.spell_cd[id] = float(Data.spell(id).get("cooldown", 0.0))
+
+
 func _cast_bolt(p) -> void:
+	if float(p.spell_cd.get("bolt", 0.0)) > 0.0:
+		return  # quick recast: silently wait (no message spam)
 	var cost: float = p.spell_cost()
 	if p.mana < cost:
 		_say(p, "Mana insuficiente")
 		return
 	p.mana -= cost
+	_spell_used(p, "bolt")
 	p.corrupt(5.0)
 	emit_noise(p, float(Data.spell("bolt").get("noise", 18)) * p.wand_noise_mult())
 	var best = null
@@ -2149,10 +2193,13 @@ func _cast_lume(p) -> void:
 		_say(p, "Vocês ainda não conhecem LUME (ache páginas nas Ruínas)")
 		return
 	var lume := Data.spell("lume")
+	if not _spell_ready(p, "lume"):
+		return
 	if p.mana < float(lume.mana):
 		_say(p, "Mana insuficiente (Lume custa %d)" % int(lume.mana))
 		return
 	p.mana -= float(lume.mana)
+	_spell_used(p, "lume")
 	p.corrupt(3.0)
 	emit_noise(p, float(Data.spell("lume").get("noise", 30)) * p.wand_noise_mult())
 	var burned := 0
@@ -2174,10 +2221,13 @@ func _cast_shield(p) -> void:
 		_say(p, "Vocês ainda não conhecem ESCUDO (ache páginas nas Ruínas)")
 		return
 	var esc := Data.spell("escudo")
+	if not _spell_ready(p, "escudo"):
+		return
 	if p.mana < float(esc.mana):
 		_say(p, "Mana insuficiente (Escudo custa %d)" % int(esc.mana))
 		return
 	p.mana -= float(esc.mana)
+	_spell_used(p, "escudo")
 	p.shield_t = float(esc.duration)
 	emit_noise(p, float(Data.spell("escudo").get("noise", 14)) * p.wand_noise_mult())
 	p.play_action("shield")

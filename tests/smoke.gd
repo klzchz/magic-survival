@@ -421,6 +421,14 @@ func _initialize() -> void:
 	close.position = p.position + Vector3(6, 1, 0)
 	_check(w.errante_target(close.position) == p, "up close, Errantes sense you even when quiet")
 	p.mana = 100.0
+	p.noise = 0.0
+	w.perform(p, "bolt")
+	var mana_after_one: float = p.mana
+	w.perform(p, "bolt")
+	_check(is_equal_approx(p.mana, mana_after_one) and p.spell_cd.get("bolt", 0.0) > 0.0, "a bolt recharges briefly: an instant recast is ignored")
+	p.spell_cd.clear()
+	p.noise = 0.0
+	p.mana = 100.0
 	w.perform(p, "bolt")
 	_check(is_equal_approx(p.noise, 18.0), "a spell bolt makes 18 arcane noise")
 	p.noise = 80.0
@@ -618,11 +626,13 @@ func _initialize() -> void:
 	_check(w.terrain.biome_at(arena.x, arena.z) == "flowered" and absf(arena.x) < Cfg.WORLD - 20 and absf(arena.z) < Cfg.WORLD - 20, "the temple sits in the flowered biome, inside the island")
 	var loose := 0
 	var to_local: Transform3D = ti.root.transform.affine_inverse()
+	var loose_kinds := []
 	for g in w.resources():
 		var lp: Vector3 = to_local * g.position
 		if absf(lp.x) < 9.0 and lp.z > -20.0 and lp.z < 18.0:  # inside the walls
 			loose += 1
-	_check(loose <= 9 and loose >= 5, "only the temple's own loot lies inside (%d)" % loose)
+			loose_kinds.append(g.item_id if g.kind == "item" else g.kind)
+	_check(loose <= 9 and loose >= 5, "only the temple's own loot lies inside (%d: %s)" % [loose, str(loose_kinds)])
 	var seal_at: Vector3 = ti.seal.global_position  # the sanctum door
 	var seal_push: Vector3 = w.resolve_collision(Vector3(seal_at.x, 0, seal_at.z))
 	_check(Vector2(seal_push.x - seal_at.x, seal_push.z - seal_at.z).length() > 0.2, "the jade seal blocks the sanctum")

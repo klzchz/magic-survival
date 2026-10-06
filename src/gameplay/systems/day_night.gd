@@ -74,6 +74,38 @@ func light() -> float:
 	return clampf(0.5 + 0.5 * sin(phase * TAU + PI / 6.0), 0.0, 1.0)
 
 
+## Day phase for a light level: "day" (>0.6), "dusk" (0.35..0.6), "night".
+static func phase_of(lit: float) -> String:
+	return "day" if lit > 0.6 else ("dusk" if lit > 0.35 else "night")
+
+
+static func phase_name(id: String) -> String:
+	return {"day": "Dia claro", "dusk": "Crepúsculo", "night": "Noite"}.get(id, id)
+
+
+func light_at(time: float) -> float:
+	var phase := fmod(time, Cfg.DAY_LENGTH) / Cfg.DAY_LENGTH
+	return clampf(0.5 + 0.5 * sin(phase * TAU + PI / 6.0), 0.0, 1.0)
+
+
+## {"phase", "next", "seconds"}: what comes next and how long until it does.
+func next_phase() -> Dictionary:
+	var now := phase_of(light())
+	var step := 0.5
+	var dt := step
+	while dt < Cfg.DAY_LENGTH:
+		var ph := phase_of(light_at(t + dt))
+		if ph != now:
+			return {"phase": now, "next": ph, "seconds": dt}
+		dt += step
+	return {"phase": now, "next": now, "seconds": 0.0}
+
+
+## 0..1 position inside the full day-night cycle (for the HUD day bar).
+func cycle_pos() -> float:
+	return fmod(t, Cfg.DAY_LENGTH) / Cfg.DAY_LENGTH
+
+
 func advance(delta: float) -> void:
 	t += delta
 	var night := light() < 0.35

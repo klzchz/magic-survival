@@ -1,11 +1,45 @@
 {
-  "order": ["bolt", "lume", "escudo", "eco"],
-  "bolt":   {"name": "Disparo Arcano", "key": "F / clique", "mana": 20, "noise": 18, "damage": 60, "range": 16, "learned": true,
-             "desc": "Atinge o Errante mais próximo (até 16 m). Dano e custo mudam com a varinha na mão."},
-  "lume":   {"name": "Lume", "key": "Z", "mana": 15, "noise": 30, "damage": 50, "radius": 10,
-             "desc": "Explosão de luz que fere todos os Errantes em 10 m e reacende o fogo-fátuo (+10). Muito barulhento."},
-  "escudo": {"name": "Escudo", "key": "X", "mana": 25, "noise": 14, "duration": 6,
-             "desc": "Nenhum golpe te atinge por 6 s."},
-  "eco":    {"name": "Eco Arcano", "key": "passivo", "mana": 0, "noise": 0,
-             "desc": "Passivo: +30 de mana máxima."}
+  "order": [
+    "bolt",
+    "lume",
+    "escudo",
+    "eco"
+  ],
+  "bolt": {
+    "name": "Disparo Arcano",
+    "key": "F / clique",
+    "mana": 20,
+    "noise": 18,
+    "damage": 60,
+    "range": 16,
+    "learned": true,
+    "desc": "Atinge o Errante mais próximo (até 16 m). Dano e custo mudam com a varinha na mão.",
+    "cooldown": 0.6
+  },
+  "lume": {
+    "name": "Lume",
+    "key": "Z",
+    "mana": 15,
+    "noise": 30,
+    "damage": 50,
+    "radius": 10,
+    "desc": "Explosão de luz que fere todos os Errantes em 10 m e reacende o fogo-fátuo (+10). Muito barulhento.",
+    "cooldown": 8
+  },
+  "escudo": {
+    "name": "Escudo",
+    "key": "X",
+    "mana": 25,
+    "noise": 14,
+    "duration": 6,
+    "desc": "Nenhum golpe te atinge por 6 s.",
+    "cooldown": 14
+  },
+  "eco": {
+    "name": "Eco Arcano",
+    "key": "passivo",
+    "mana": 0,
+    "noise": 0,
+    "desc": "Passivo: +30 de mana máxima."
+  }
 }

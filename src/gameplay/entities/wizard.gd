@@ -40,6 +40,7 @@ var noise := 0.0           # arcane noise 0..100: magic use draws the Errantes
 var guard_t := 0.0         # Talismã do Guardião: -50% damage while > 0
 var hush_t := 0.0          # Talismã do Silêncio: -70% noise while > 0
 var resting := false       # resting in the cabin (time flies, heals, hungrier)
+var spell_cd := {}         # spell id -> seconds until it can be cast again
 var velocity := Vector3.ZERO  # horizontal velocity (accelerates / brakes)
 var air := 0.0             # height above the ground while hopping
 var vy := 0.0              # vertical speed of the hop
@@ -156,6 +157,8 @@ func apply_meta(eco: bool) -> void:
 
 func tick_stats(delta: float) -> String:
 	var note := ""
+	for sid in spell_cd.keys():
+		spell_cd[sid] = maxf(0.0, float(spell_cd[sid]) - delta)
 	hunger = maxf(0.0, hunger - 1.2 * perk("hunger_rate") * delta)
 	if hunger <= 0.0:
 		health = maxf(0.0, health - 3.0 * delta)
