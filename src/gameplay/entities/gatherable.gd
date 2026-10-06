@@ -16,6 +16,7 @@ var item_count := 1
 var item_stack := {}       # optional full stack (keeps durability / freshness)
 var grown := true          # false while a regrowable is picked
 var regrow_t := 0.0
+var grow_t := -1.0         # saplings: seconds until they become a tree (-1 = never)
 var visual: Node3D
 var _fruit: Node3D         # berries / blades that vanish when picked
 var _clock := 0.0
@@ -24,6 +25,8 @@ var _clock := 0.0
 func setup(k: String) -> void:
 	kind = k
 	hp = int(Data.resource(k).get("hp", 1))
+	if Data.resource(k).has("grow_time"):
+		grow_t = float(Data.resource(k).grow_time) * randf_range(0.8, 1.2)
 
 
 func setup_item(id: String, count := 1, stack := {}) -> void:
@@ -55,6 +58,7 @@ func _ready() -> void:
 		"mushroom":
 			visual = ItemArt.build(self, "mushroom")
 			visual.scale = Vector3.ONE * 1.4
+			_fruit = visual
 		"grass_tuft":
 			visual = Node3D.new()
 			add_child(visual)
@@ -146,6 +150,14 @@ func set_picked() -> void:
 	regrow_t = float(info().get("regrow", 120.0))
 	if _fruit != null:
 		_fruit.visible = false
+
+
+## Saplings left alone grow into a tree. Returns true when it is time.
+func tick_grow(delta: float) -> bool:
+	if grow_t < 0.0 or not grown:
+		return false
+	grow_t -= delta
+	return grow_t <= 0.0
 
 
 ## Called by the world every tick for picked regrowables.

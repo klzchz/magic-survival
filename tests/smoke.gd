@@ -27,7 +27,7 @@ func _step(w, seconds: float) -> void:
 		w.tick(0.05)
 
 
-func _step_until_night(w, max_seconds := 200.0) -> bool:
+func _step_until_night(w, max_seconds := 400.0) -> bool:
 	var elapsed := 0.0
 	while elapsed < max_seconds:
 		w.tick(0.05)
@@ -35,6 +35,20 @@ func _step_until_night(w, max_seconds := 200.0) -> bool:
 		if w.day_night.prev_night:
 			return true
 	return false
+
+
+## Builds a structure through the real placement flow on cleared flat ground.
+func _build(w, p, rid: String, at := Vector3(0, 0, 0)) -> bool:
+	for g in w.resources():
+		if Vector2(g.position.x - at.x, g.position.z - at.z).length() < 9.0:
+			w._despawn(g)
+	for st in w._children(w.structures_root):
+		if Vector2(st.position.x - at.x, st.position.z - at.z).length() < 9.0 and st.kind != "campfire" and rid == "x":
+			w._despawn(st)
+	p.position = w.terrain.on_ground(at)
+	if not w.craft(p, rid):
+		return false
+	return w.confirm_placement()
 
 
 func _force_day(w) -> void:
@@ -178,16 +192,16 @@ func _initialize() -> void:
 	p.inventory.add("rock", 4)
 	p.inventory.add("log", 3)
 	p.inventory.add("flint", 2)
-	_check(w.craft(p, "altar") and w.structures_of("altar").size() == 1, "build the Arcane Altar")
-	p.position = w.structures_of("altar")[0].position
-	_check(w.craft(p, "ward") and w.structures_of("ward").size() == 1, "near the altar the bone ward unlocks")
+	_check(_build(w, p, "altar", Vector3(-6, 0, 6)) and w.structures_of("altar").size() == 1, "build the Arcane Altar (placement preview)")
+	p.position = w.structures_of("altar")[0].position + Vector3(2.5, 0, 0)
+	_check(w.craft(p, "ward") and w.confirm_placement() and w.structures_of("ward").size() == 1, "near the altar the bone ward unlocks")
 	var wpos: Vector3 = w.structures_of("ward")[0].position
 	var pushed: Vector3 = w.apply_wards(wpos + Vector3(1, 0, 0))
 	_check(Vector2(pushed.x - wpos.x, pushed.z - wpos.z).length() >= Cfg.WARD_RADIUS - 0.1, "ward pushes shadows to its edge")
 	p.inventory.add("rock", 3)
 	p.inventory.add("log", 2)
-	w.craft(p, "cauldron")
-	p.position = w.structures_of("cauldron")[0].position
+	_build(w, p, "cauldron", Vector3(6, 0, -6))
+	p.position = w.structures_of("cauldron")[0].position + Vector3(2.5, 0, 0)
 	p.inventory.add("mushroom", 2)
 	p.inventory.add("berries", 1)
 	_check(w.craft(p, "elixir") and p.inventory.count("elixir") == 2, "brew an Elixir at the cauldron")
@@ -201,7 +215,7 @@ func _initialize() -> void:
 	# ---------- campfire: fuel, cooking, light ----------
 	p.inventory.add("grass", 3)
 	p.inventory.add("log", 2)
-	w.craft(p, "campfire")
+	_build(w, p, "campfire", Vector3(6, 0, 6))
 	var fire = w.structures_of("campfire")[0]
 	_check(fire.burning() and fire.fuel == 120.0, "a new campfire starts with 120s of fuel")
 	fire.burn(100.0)
@@ -222,6 +236,26 @@ func _initialize() -> void:
 	_check(p.inventory.count("mushroom_cooked") == 1 and p.inventory.count("mushroom") == raw - 1, "secondary use near the fire cooks food")
 	fire.burn(1000.0)
 	_check(not fire.burning() and fire.radius() == 0.0, "a burnt-out fire gives no light")
+	p.position = fire.position + Vector3(1.5, 0, 0)
+	p.inventory.add("log", 1)
+	for i in range(Inventory.SIZE):
+		if p.inventory.slots[i] != null and p.inventory.slots[i].id == "log":
+			w.perform(p, "alt:%d" % i)
+			break
+	_check(fire.burning(), "a dead fire accepts fuel and relights")
+
+	# ---------- placement validation ----------
+	var lake2: Dictionary = w.terrain.lakes[0]
+	_check(w.placement_blocker("campfire", Vector3(lake2.center.x, 0, lake2.center.y)) != "", "can't build in a lake")
+	_check(w.placement_blocker("campfire", fire.position) != "", "can't build on top of another structure")
+	var tr = w.resources_of("tree")[0]
+	_check(w.placement_blocker("campfire", tr.position) != "", "can't build on a tree")
+	p.inventory.add("grass", 3)
+	p.inventory.add("log", 2)
+	var logs_before: int = p.inventory.count("log")
+	w.craft(p, "campfire")
+	w.cancel_placement()
+	_check(p.inventory.count("log") == logs_before and w.placing == "", "cancelling a placement spends nothing")
 
 	# ---------- darkness, torch, armor ----------
 	p.position = Vector3(40, 0, 40)
@@ -307,20 +341,20 @@ func _initialize() -> void:
 	_check(boss != null, "Blood Moon spawns the boss")
 	if boss != null:
 		boss.position = p.position + Vector3(2, 1.8, 0)
-		var hearts_before: int = w.meta.hearts
+		var hearts_before: int = w.run_hearts
 		boss.hp = 1.0
 		p.mana = 100.0
 		w.perform(p, "bolt")
 		w.tick(0.05)
-		_check(w.meta.hearts == hearts_before + 1, "boss kill grants a Mist Heart")
+		_check(w.run_hearts == hearts_before + 1, "boss kill grants a Mist Heart")
 		_check(w.ground_items("bone").size() > 0 and w.ground_items("essence").size() > 0, "boss drops bones and essence")
 	p.position = w.portal.position
-	w.meta.hearts = 2
+	w.run_hearts = 2
 	w.perform(p, "interact")
 	_check(not w.won, "portal stays dormant below 3 hearts")
-	w.meta.hearts = 3
+	w.run_hearts = 3
 	w.perform(p, "interact")
-	_check(w.won and w.meta.hearts == 0, "3 Mist Hearts reopen the Portal (WIN)")
+	_check(w.won and w.run_hearts == 0, "3 Mist Hearts reopen the Portal (WIN)")
 
 	# ---------- death and roguelite reset ----------
 	w.restart()
@@ -337,7 +371,7 @@ func _initialize() -> void:
 	_check(p.char_id == "brasa" and p.inventory.hand_id() == "torch", "Brasa starts holding a torch")
 	p.inventory.add("grass", 3)
 	p.inventory.add("log", 2)
-	w.craft(p, "campfire")
+	_build(w, p, "campfire", Vector3(0, 0, 0))
 	var bfire = w.structures_of("campfire")[0]
 	bfire.burn(100.0)
 	_check(is_equal_approx(bfire.fuel, 70.0), "Brasa's fires burn twice as long")
@@ -371,6 +405,44 @@ func _initialize() -> void:
 	_force_day(w)
 	_step(w, 0.1)
 	_check(p.dead and not w.game_over, "one fallen apprentice does not end the run")
+
+	# ---------- save / continue ----------
+	w.start_game("aldric")
+	p = w.local_player
+	_force_day(w)
+	p.inventory.add("log", 9)
+	p.inventory.add("grass", 3)
+	p.health = 55.0
+	_check(_build(w, p, "campfire", Vector3(5, 0, 5)), "campfire placed for the save test")
+	var saved_fire = w.structures_of("campfire")[0]
+	saved_fire.burn(30.0)
+	var picked = w.resources_of("grass_tuft")[0]
+	picked.set_picked()
+	var picked_pos: Vector3 = picked.position
+	w.run_hearts = 2
+	w.day_night.nights = 4
+	var seed_saved: int = w.world_seed
+	var lake_saved: Vector2 = w.terrain.lakes[0].center
+	var res_count: int = w.resources().size()
+	var logs_saved: int = p.inventory.count("log")
+	_check(w.save_run(), "the run is saved to disk")
+	w.start_game("thorne")  # play something else in between
+	_check(w.continue_run(), "Continuar loads the saved run")
+	p = w.local_player
+	_check(p.char_id == "aldric" and is_equal_approx(p.health, 55.0), "apprentice and vitals restored")
+	_check(p.inventory.count("log") == logs_saved, "inventory restored")
+	_check(w.world_seed == seed_saved and w.terrain.lakes[0].center.is_equal_approx(lake_saved), "same island rebuilt from the seed")
+	_check(w.structures_of("campfire").size() == 1 and is_equal_approx(w.structures_of("campfire")[0].fuel, 90.0), "structures and their fuel restored")
+	_check(w.resources().size() == res_count, "resources restored")
+	var bare := false
+	for g in w.resources_of("grass_tuft"):
+		if g.position.distance_to(picked_pos) < 0.05 and not g.grown:
+			bare = true
+	_check(bare, "picked (regrowing) resources stay picked")
+	_check(w.run_hearts == 2 and w.day_night.nights == 4, "run hearts and day count restored")
+	p.health = 0.0
+	_step(w, 0.1)
+	_check(not FileAccess.file_exists("user://run_save.json"), "dying deletes the run save (roguelite)")
 
 	# ---------- menus: main menu · select · pause · game over ----------
 	w.show_main_menu()

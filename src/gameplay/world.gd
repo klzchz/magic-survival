@@ -11,8 +11,12 @@ const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
 const Fx = preload("res://src/core/fx.gd")
 const Data = preload("res://src/core/data.gd")
+const Dev = preload("res://src/core/dev.gd")
+const ItemArt = preload("res://src/core/item_art.gd")
+const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
 const MetaSave = preload("res://src/core/meta_save.gd")
 const Terrain = preload("res://src/gameplay/systems/terrain.gd")
+const RunSave = preload("res://src/gameplay/run_save.gd")
 const Inventory = preload("res://src/gameplay/inventory.gd")
 const WizardScene = preload("res://scenes/wizard.tscn")
 const ShadowScene = preload("res://scenes/shadow.tscn")
@@ -44,6 +48,14 @@ var meta := MetaSave.new()
 var local_player = null
 var portal = null
 var started := false
+var run_hearts := 0        # Mist Hearts of THIS run (records/spells stay permanent)
+var world_seed := 0        # rebuilds the same island on Continue
+var placing := ""          # structure recipe being placed (preview mode)
+var place_ok := false
+var place_why := ""
+var _ghost: Node3D
+var _ghost_ok_mat: StandardMaterial3D
+var _ghost_bad_mat: StandardMaterial3D
 var won := false
 var game_over := false
 var shot_timer := -1.0     # dev: MAGIC_SHOT=1 saves a screenshot after MAGIC_SHOT_AT s
@@ -60,10 +72,10 @@ var last_character := DEFAULT_CHARACTER
 
 
 func _ready() -> void:
-	if OS.get_environment("MAGIC_SHOT") != "":
-		shot_timer = float(OS.get_environment("MAGIC_SHOT_AT")) if OS.get_environment("MAGIC_SHOT_AT") != "" else 3.0
-		if OS.get_environment("MAGIC_SHOT_PATH") != "":
-			shot_path = OS.get_environment("MAGIC_SHOT_PATH")
+	if Dev.has("shot"):
+		shot_timer = float(Dev.arg("shot")) if Dev.arg("shot").is_valid_float() and float(Dev.arg("shot")) > 1.0 else float(Dev.arg("shot-at") if Dev.has("shot-at") else "3")
+		if Dev.has("shot-path"):
+			shot_path = Dev.arg("shot-path")
 	meta.load_from_disk()
 	day_night.night_started.connect(_on_night_start)
 	day_night.dawn.connect(_on_dawn)
@@ -73,7 +85,7 @@ func _ready() -> void:
 	add_child(ambient)
 	fireflies = Fx.fireflies(ambient)
 	leaves = Fx.leaves(ambient)
-	var forced := OS.get_environment("MAGIC_CHAR")
+	var forced := Dev.arg("char")
 	if forced != "" or DisplayServer.get_name() == "headless":
 		start_game(forced if forced != "" else DEFAULT_CHARACTER)
 	else:
@@ -98,6 +110,54 @@ func _close_menu() -> void:
 		menu = null
 
 
+## Rebuilds a saved run: same island from the seed, then the saved state.
+func continue_run() -> bool:
+	var data := RunSave.read()
+	if data.is_empty():
+		return false
+	start_game(String(data.character), int(data.world_seed))
+	for g in resources():
+		_despawn(g)
+	for st in _children(structures_root):
+		_despawn(st)
+	for r in data.resources:
+		var g
+		if r.kind == "item":
+			g = spawn_item(r.item_id, int(r.item_count), RunSave.vec(r.pos), r.item_stack if r.item_stack is Dictionary else {})
+		else:
+			g = _spawn_resource(r.kind, RunSave.vec(r.pos))
+		g.hp = int(r.hp)
+		g.grow_t = float(r.grow_t)
+		if not r.grown:
+			g.set_picked()
+			g.regrow_t = float(r.regrow_t)
+	for st in data.structures:
+		var s = spawn_structure(st.kind, RunSave.vec(st.pos), float(st.fuel_mult))
+		s.fuel = float(st.fuel)
+	var c: Dictionary = data.clock
+	day_night.t = float(c.t)
+	day_night.nights = int(c.nights)
+	day_night.blood_moon = bool(c.blood_moon)
+	day_night.prev_night = bool(c.prev_night)
+	run_hearts = int(data.run_hearts)
+	var p = local_player
+	var ps: Dictionary = data.player
+	p.position = RunSave.vec(ps.pos)
+	for k in ["health", "hunger", "mana", "corruption", "wisp", "noise"]:
+		p.set(k, float(ps[k]))
+	for i in range(Inventory.SIZE):
+		p.inventory.slots[i] = RunSave.stack(ps.slots[i])
+	p.inventory.equip.hand = RunSave.stack(ps.equip.hand)
+	p.inventory.equip.body = RunSave.stack(ps.equip.body)
+	p.refresh_gear()
+	_announce("Partida carregada: dia %d" % (day_night.nights + 1))
+	return true
+
+
+func save_run() -> bool:
+	return started and not game_over and not won and RunSave.write(self)
+
+
 func show_main_menu() -> void:
 	_close_select()
 	for p in players():
@@ -110,7 +170,7 @@ func show_main_menu() -> void:
 	state = "menu"
 	hud.visible = false
 	_open_menu("Magical Survive", "Aprendizes de magia presos na ilha da Névoa. Sobreviva, domine a magia e reabra o Portal.",
-		[["play", "Jogar"], ["fullscreen", "Tela cheia"], ["controls", "Controles"], ["quit", "Sair"]], true)
+		([["continue", "Continuar partida"]] if RunSave.exists() else []) + [["play", "Novo jogo"], ["fullscreen", "Tela cheia"], ["controls", "Controles"], ["quit", "Sair"]], true)
 
 
 func show_select() -> void:
@@ -133,8 +193,9 @@ func _close_select() -> void:
 func pause() -> void:
 	if state != "playing":
 		return
+	cancel_placement()
 	state = "paused"
-	_open_menu("Pausado", "", [["resume", "Continuar"], ["controls", "Controles"], ["fullscreen", "Tela cheia"], ["menu", "Menu principal"], ["quit", "Sair do jogo"]])
+	_open_menu("Pausado", "", [["resume", "Continuar"], ["save", "Salvar partida"], ["controls", "Controles"], ["fullscreen", "Tela cheia"], ["save_menu", "Salvar e voltar ao menu"], ["save_quit", "Salvar e sair do jogo"]])
 
 
 func resume() -> void:
@@ -144,6 +205,7 @@ func resume() -> void:
 
 func _show_end_menu(victory: bool) -> void:
 	state = "ended"
+	RunSave.erase()  # a finished run can't be continued (roguelite)
 	var nights: int = day_night.nights
 	if victory:
 		_open_menu("O Portal se reabre!", "Vocês encontraram o caminho de volta ao Colégio em %d noites. O saber aprendido permanece." % nights,
@@ -159,6 +221,17 @@ func _on_menu_pick(id: String) -> void:
 			show_select()
 		"again":
 			start_game(last_character)
+		"continue":
+			continue_run()
+		"save":
+			resume()
+			_announce("Partida salva" if save_run() else "Não foi possível salvar")
+		"save_menu":
+			save_run()
+			show_main_menu()
+		"save_quit":
+			save_run()
+			get_tree().quit()
 		"resume":
 			resume()
 		"menu":
@@ -179,26 +252,30 @@ func _on_menu_pick(id: String) -> void:
 
 
 ## Starts (or restarts) a run as the chosen character on a fresh island.
-func start_game(character: String) -> void:
+func start_game(character: String, seed_value := -1) -> void:
 	_close_select()
 	_close_menu()
 	last_character = character
 	state = "playing"
+	run_hearts = 0
+	cancel_placement()
 	camera_rig.angle = 0.0
 	for p in players():
 		_despawn(p)
 	won = false
 	game_over = false
 	day_night.reset()
-	_generate_world()  # terrain first: apprentices spawn on its ground
+	_generate_world(seed_value)  # terrain first: apprentices spawn on its ground
 	local_player = add_player(1, character)
 	camera_rig.target = local_player
 	hud.visible = true
 	hud.hide_end()
 	started = true
 	# dev: MAGIC_TIME=<seconds> starts the clock later (e.g. 58 = first night)
-	if OS.get_environment("MAGIC_TIME") != "":
-		day_night.t = float(OS.get_environment("MAGIC_TIME"))
+	if Dev.has("time"):
+		day_night.t = float(Dev.arg("time"))
+	if Dev.has("scene"):
+		_stage_scene.call_deferred(Dev.arg("scene"))
 	_announce("%s %s chega à ilha. Colete capim, galhos e pederneira." % [local_player.stats.get("name", ""), local_player.stats.get("title", "")])
 
 
@@ -314,6 +391,18 @@ func is_lit(pos: Vector3, lit: float) -> bool:
 	return false
 
 
+## Nearest campfire you can use: lit_only for cooking; any (even cold
+## embers) for adding fuel, so a dead fire can be relit.
+func near_campfire(p, lit_only: bool):
+	for s in structures_of("campfire"):
+		if lit_only and not s.burning():
+			continue
+		var reach: float = s.radius() if s.burning() else 3.0
+		if p.position.distance_to(s.position) < maxf(reach, 3.0):
+			return s
+	return null
+
+
 ## Nearest structure of a kind within its working radius (tech, cooking).
 func near_structure(p, kind: String):
 	for s in structures_of(kind):
@@ -427,7 +516,9 @@ func _ruins_pos() -> Vector3:
 	return terrain.on_ground(_ruins_center() + Vector3(cos(ang) * r, 0.0, sin(ang) * r))
 
 
-func _generate_world() -> void:
+func _generate_world(seed_value := -1) -> void:
+	world_seed = seed_value if seed_value >= 0 else randi() % 2000000000
+	seed(world_seed)  # same seed -> same island (relief, lakes, decor, resources)
 	for root in [shadows_root, resources_root, structures_root, decor_root]:
 		for n in root.get_children():
 			_despawn(n)
@@ -491,11 +582,13 @@ func _generate_world() -> void:
 	portal = PortalScene.instantiate()
 	portal.position = terrain.on_ground(_ruins_center())
 	decor_root.add_child(portal)
+	randomize()  # gameplay randomness stays unpredictable
 
 
 
 ## New island, same apprentices (knowledge persists).
 func restart() -> void:
+	run_hearts = 0
 	won = false
 	game_over = false
 	day_night.reset()
@@ -518,6 +611,8 @@ func tick(delta: float) -> void:
 		if shot_timer <= 0.0:
 			get_viewport().get_texture().get_image().save_png(shot_path)
 			print("MAGIC_SHOT saved: ", shot_path)
+			if Dev.has("quit-after-shot"):
+				get_tree().quit()
 	if state == "menu" or state == "select":
 		# main-menu backdrop: slow orbit over the island at dusk
 		camera_rig.orbit(delta)
@@ -555,6 +650,10 @@ func tick(delta: float) -> void:
 	for g in resources():
 		if not g.grown:
 			g.tick_regrow(delta)
+		elif g.kind == "sapling" and g.tick_grow(delta):
+			var at: Vector3 = g.position
+			_despawn(g)
+			_spawn_resource("tree", at)
 
 	# Errantes rise at night: a few always, many more where magic is loud
 	var loud := _max_noise()
@@ -573,6 +672,8 @@ func tick(delta: float) -> void:
 
 	_check_deaths()
 
+	if placing != "":
+		_update_placement()
 	camera_rig.follow(delta)
 	hud.refresh(local_player, self)
 
@@ -628,6 +729,7 @@ func _on_night_start(blood_moon: bool) -> void:
 
 func _on_dawn(nights: int) -> void:
 	meta.record_nights(nights)
+	save_run()  # autosave every dawn
 	_announce("Amanheceu. Noites sobrevividas: %d" % nights)
 
 
@@ -637,11 +739,10 @@ func _on_shadow_death(s) -> void:
 		who = null
 	var at: Vector3 = s.position
 	if s.boss:
-		meta.hearts += 1
-		meta.save()
+		run_hearts += 1
 		for id in BOSS_DROPS:
 			spawn_item(id, BOSS_DROPS[id], at + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)))
-		_announce("O CORAÇÃO DA NÉVOA CAIU! (corações: %d/%d p/ o Portal) Recolha o butim." % [meta.hearts, Cfg.PORTAL_HEARTS])
+		_announce("O CORAÇÃO DA NÉVOA CAIU! (corações: %d/%d p/ o Portal) Recolha o butim." % [run_hearts, Cfg.PORTAL_HEARTS])
 	elif who != null:
 		for id in DROP_TABLE:
 			if randf() < DROP_TABLE[id]:
@@ -662,6 +763,23 @@ func _announce(text: String) -> void:
 
 
 # ---------- actions ----------
+
+## QA scenes (dev only): stage a situation for a screenshot / playtest.
+func _stage_scene(scene: String) -> void:
+	var p = local_player
+	if p == null:
+		return
+	match scene:
+		"night":
+			for i in range(5):
+				var s = spawn_shadow()
+				var a := TAU * i / 5.0
+				s.position = terrain.on_ground(p.position + Vector3(cos(a), 0, sin(a)) * randf_range(6.0, 11.0)) + Vector3(0, s.hover_height(), 0)
+			p.noise = 60.0
+		"camp":
+			give(p, {"grass": 6, "log": 4, "rock": 6, "flint": 4, "twig": 6})
+			craft(p, "campfire")
+
 
 ## F11 / Alt+Enter: fullscreen <-> window (the HUD scales with the window).
 func toggle_fullscreen() -> void:
@@ -717,6 +835,9 @@ func craft(p, rid: String) -> bool:
 		_say(p, why)
 		return false
 	var r := Data.recipe(rid)
+	if r.get("structure", false) and p == local_player:
+		_begin_placement(rid)
+		return true
 	p.inventory.pay(r.cost)
 	p.play_action("build")
 	if Data.tab_tech(r.tab) != "" or rid == "altar" or rid == "ward":  # magic work hums
@@ -732,6 +853,109 @@ func craft(p, rid: String) -> bool:
 	return true
 
 
+# ---------- structure placement (preview, validation) ----------
+
+func _footprint(kind: String) -> float:
+	return float(FOOTPRINT.get(kind, 1.4))
+
+
+## Why a structure can't stand at pos ("" = it can): water, steep ground,
+## trees/rocks, other structures, the Portal and the temple ruins.
+func placement_blocker(kind: String, pos: Vector3) -> String:
+	var fp := _footprint(kind)
+	if absf(pos.x) > Cfg.WORLD - 1.0 or absf(pos.z) > Cfg.WORLD - 1.0:
+		return "Fora da ilha"
+	var h := terrain.height_at(pos.x, pos.z)
+	for o in [Vector2(fp, 0), Vector2(-fp, 0), Vector2(0, fp), Vector2(0, -fp)]:
+		var h2 := terrain.height_at(pos.x + o.x, pos.z + o.y)
+		if h2 < terrain.water_level + 0.1:
+			return "Muito perto da água"
+		if absf(h2 - h) > 0.9:
+			return "Terreno inclinado demais"
+	if h < terrain.water_level + 0.1:
+		return "Não dá pra construir na água"
+	for st in _children(structures_root):
+		if Vector2(st.position.x - pos.x, st.position.z - pos.z).length() < fp + _footprint(st.kind):
+			return "Sobrepõe outra construção"
+	for g in resources():
+		if g.kind in ["tree", "rock", "berry_bush", "page"] and Vector2(g.position.x - pos.x, g.position.z - pos.z).length() < fp + 0.8:
+			return "Tem árvore ou rocha no caminho"
+	if portal != null and Vector2(portal.position.x - pos.x, portal.position.z - pos.z).length() < fp + 3.5:
+		return "Muito perto do Portal"
+	for ruin in pillars():
+		if Vector2(ruin.position.x - pos.x, ruin.position.z - pos.z).length() < fp + 1.5:
+			return "Ruínas no caminho"
+	return ""
+
+
+func _placement_spot(p) -> Vector3:
+	var reach := 2.2 + _footprint(placing)
+	return terrain.on_ground(p.position + camera_rig.forward() * reach)
+
+
+func _begin_placement(rid: String) -> void:
+	cancel_placement()
+	placing = rid
+	_ghost_ok_mat = _ghost_mat(Color(0.35, 1.0, 0.45, 0.45))
+	_ghost_bad_mat = _ghost_mat(Color(1.0, 0.3, 0.25, 0.45))
+	_ghost = Node3D.new()
+	add_child(_ghost)
+	ItemArt.build(_ghost, rid)
+	_update_placement()
+	_announce("Posicione: %s  ·  E ou clique confirma  ·  Esc ou botão direito cancela" % Data.display_name(rid))
+
+
+func _ghost_mat(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = c
+	return m
+
+
+func _update_placement() -> void:
+	if placing == "" or local_player == null:
+		return
+	var pos := _placement_spot(local_player)
+	_ghost.position = pos
+	place_why = placement_blocker(placing, pos)
+	place_ok = place_why == ""
+	for mi in _ghost.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).material_override = _ghost_ok_mat if place_ok else _ghost_bad_mat
+
+
+## Builds the previewed structure if the spot is valid (pays the cost then).
+func confirm_placement() -> bool:
+	if placing == "":
+		return false
+	_update_placement()
+	var p = local_player
+	if not place_ok:
+		_say(p, "Não dá pra construir aqui: " + place_why)
+		return false
+	var rid := placing
+	var why := craft_blocker(p, rid)
+	if why != "":
+		_say(p, why)
+		cancel_placement()
+		return false
+	p.inventory.pay(Data.recipe(rid).cost)
+	p.play_action("build")
+	if Data.tab_tech(Data.recipe(rid).tab) != "" or rid == "altar" or rid == "ward":
+		emit_noise(p, float(Data.night("noise", {}).get("magic_build", 20)))
+	spawn_structure(rid, _ghost.position, p.perk("fire_mult") if rid == "campfire" else 1.0)
+	cancel_placement()
+	_say(p, "Construiu: %s" % Data.display_name(rid))
+	return true
+
+
+func cancel_placement() -> void:
+	placing = ""
+	if _ghost != null:
+		_ghost.queue_free()
+		_ghost = null
+
+
 ## Secondary use (right click / Shift+number): cook food or feed a fire when
 ## next to a burning campfire, otherwise drop the stack on the ground.
 func _alt_use(p, i: int) -> void:
@@ -739,17 +963,19 @@ func _alt_use(p, i: int) -> void:
 	if s == null:
 		return
 	var d := Data.item(s.id)
-	var fire = near_structure(p, "campfire")
+	var fire = near_campfire(p, true)
+	var embers = near_campfire(p, false)
 	if fire != null and d.has("cooked"):
 		p.inventory.take_from(i)
 		give(p, {d.cooked: 1})
 		p.play_action("build")
 		_say(p, "Assou: %s" % Data.item_name(d.cooked))
-	elif fire != null and d.has("fuel"):
+	elif embers != null and d.has("fuel"):
+		var was_out: bool = not embers.burning()
 		p.inventory.take_from(i)
-		fire.add_fuel(float(d.fuel) * p.perk("fire_mult"))
+		embers.add_fuel(float(d.fuel) * p.perk("fire_mult"))
 		p.play_action("build")
-		_say(p, "Alimentou a fogueira")
+		_say(p, "Reacendeu a fogueira" if was_out else "Alimentou a fogueira")
 	else:
 		var stack: Dictionary = p.inventory.take_from(i, s.count)
 		spawn_item(stack.id, stack.count, p.position + Vector3(0.8, 0, 0.8), stack)
@@ -810,6 +1036,8 @@ func _interact(p) -> void:
 		best.set_picked()
 	else:
 		_despawn(best)
+		if kind == "tree":  # the forest renews: a sapling sprouts at the stump
+			_spawn_resource("sapling", best.position)
 	var parts := []
 	for id in loot:
 		parts.append("+%d %s" % [loot[id], Data.item_name(id)])
@@ -832,10 +1060,10 @@ func _learn_next_spell(p) -> void:
 
 
 func _try_portal(p) -> void:
-	if meta.hearts < Cfg.PORTAL_HEARTS:
-		_say(p, "O Portal dorme. Precisa de %d Corações da Névoa (tem %d): mate o horror da Lua de Sangue" % [Cfg.PORTAL_HEARTS, meta.hearts])
+	if run_hearts < Cfg.PORTAL_HEARTS:
+		_say(p, "O Portal dorme. Precisa de %d Corações da Névoa (tem %d): vença o horror da Lua de Sangue" % [Cfg.PORTAL_HEARTS, run_hearts])
 		return
-	meta.hearts -= Cfg.PORTAL_HEARTS
+	run_hearts -= Cfg.PORTAL_HEARTS
 	won = true
 	for q in alive_players():
 		q.celebrate()
@@ -915,6 +1143,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key != null and key.pressed and not key.echo and (key.keycode == KEY_F11 or (key.keycode == KEY_ENTER and key.alt_pressed)):
 		toggle_fullscreen()
 		return
+	if placing != "" and state == "playing":
+		var mb := event as InputEventMouseButton
+		if key != null and key.pressed and not key.echo and (key.keycode == KEY_E or key.keycode == KEY_SPACE or key.keycode == KEY_ENTER):
+			confirm_placement()
+			return
+		if (key != null and key.pressed and key.keycode == KEY_ESCAPE) or (mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT):
+			cancel_placement()
+			_announce("Construção cancelada")
+			return
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			confirm_placement()
+			return
 	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
 		match state:
 			"playing":

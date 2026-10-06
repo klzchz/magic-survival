@@ -3,7 +3,7 @@ extends RefCounted
 
 const WORLD := 60.0           # ground half-extent (world spans -WORLD..WORLD on X/Z)
 const SPEED := 8.0            # apprentice move speed (units/s)
-const DAY_LENGTH := 90.0      # seconds for a full day-night cycle
+const DAY_LENGTH := 240.0     # seconds for a full day-night cycle (tune after playtests)
 const FIRE_RADIUS := 9.0      # campfire light/burn radius
 const WARD_RADIUS := 6.0      # bone ward repel radius
 const CAULDRON_RADIUS := 4.0  # how close you must stand to brew

@@ -374,7 +374,7 @@ func refresh(p, w) -> void:
 	if dn.blood_moon:
 		phase = "LUA DE SANGUE"
 	var shield := ("  Escudo %.0fs" % p.shield_t) if p.shield_t > 0.0 else ""
-	lbl_clock.text = "Dia %d · %s\nPortal %d/%d · Melhor: %d%s" % [dn.nights + 1, phase, w.meta.hearts, Cfg.PORTAL_HEARTS, w.meta.best_nights, shield]
+	lbl_clock.text = "Dia %d · %s\nPortal %d/%d · Melhor: %d%s" % [dn.nights + 1, phase, w.run_hearts, Cfg.PORTAL_HEARTS, w.meta.best_nights, shield]
 	for i in range(slot_views.size()):
 		_fill_slot(slot_views[i], p.inventory.slots[i])
 	_fill_slot(equip_views.hand, p.inventory.equip.hand)
