@@ -49,6 +49,11 @@ func regrows() -> bool:
 	return info().has("regrow")
 
 
+## Action verb shown in the prompt ("E — Coletar Tufo de palha").
+func verb() -> String:
+	return info().get("verb", "Pegar")
+
+
 func display_name() -> String:
 	return Data.item_name(item_id) if kind == "item" else info().get("name", kind)
 
@@ -64,8 +69,10 @@ func _ready() -> void:
 			visual = Node3D.new()
 			add_child(visual)
 			Art.add_mesh(visual, Art.cylinder(0.3, 0.4, 0.1), Art.mat(Color(0.4, 0.33, 0.18)), Vector3(0, 0.05, 0))
-			_fruit = Models.spawn(visual, "qn_grass_wispy", Vector3.ZERO, 0.95)
-			if _fruit == null:
+			_fruit = Models.spawn(visual, "qn_grass_wispy", Vector3.ZERO, 1.15)
+			if _fruit != null:  # golden straw: reads apart from the green decorative grass
+				Models.tint(_fruit, {"gothic": Color(1.1, 0.95, 0.7), "desert": Color(1.6, 1.2, 0.6)}.get(biome, Color(1.55, 1.25, 0.45)))
+			else:
 				_fruit = Node3D.new()
 				visual.add_child(_fruit)
 				Art.add_mesh(_fruit, Art.box(Vector3(0.06, 1.0, 0.06)), Art.mat(Color(0.6, 0.66, 0.25)), Vector3(0, 0.5, 0))
@@ -78,6 +85,14 @@ func _ready() -> void:
 				_fruit = Node3D.new()
 				visual.add_child(_fruit)
 				Art.add_mesh(_fruit, Art.cylinder(0.03, 0.05, 1.2), Art.mat(Color(0.42, 0.3, 0.18)), Vector3(0, 0.9, 0))
+		"dry_shrub":
+			visual = Node3D.new()
+			add_child(visual)
+			_fruit = Models.spawn(visual, "qn_bush", Vector3.ZERO, 0.6)
+			if _fruit != null:
+				Models.tint(_fruit, Color(1.2, 0.85, 0.5))
+			else:
+				_fruit = Art.add_mesh(visual, Art.sphere(0.5, 0.7), Art.mat(Color(0.55, 0.42, 0.25)), Vector3(0, 0.35, 0))
 		"berry_bush":
 			visual = Node3D.new()
 			add_child(visual)

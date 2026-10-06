@@ -194,6 +194,13 @@ func random_land_pos(margin := 3.0) -> Vector3:
 	return Vector3(0, height_at(0, 0), 0)
 
 
+## Steepest height change within `r` metres (dune crests, cliffs score high).
+func slope(x: float, z: float, r := 1.5) -> float:
+	var h := height_at(x, z)
+	return maxf(maxf(absf(height_at(x + r, z) - h), absf(height_at(x - r, z) - h)),
+		maxf(absf(height_at(x, z + r) - h), absf(height_at(x, z - r) - h)))
+
+
 func on_ground(p: Vector3) -> Vector3:
 	return Vector3(p.x, height_at(p.x, p.z), p.z)
 
@@ -358,7 +365,7 @@ func _mesh_of(id: String) -> Mesh:
 ## Stylized grass tufts (MegaKit meshes) in clumps: dense in meadows, thin on
 ## trails and in the clearings, none in the water.
 func _build_grass() -> void:
-	for spec in [["qn_grass_short", int(_c("grass_short", 3200)), 0.45, 0.8], ["qn_grass_wispy", int(_c("grass_wispy", 900)), 0.35, 0.6]]:
+	for spec in [["qn_grass_short", int(_c("grass_short", 3200)), 0.45, 0.8], ["qn_clover", int(_c("grass_wispy", 900)), 0.5, 0.8]]:
 		var mesh := _mesh_of(spec[0])
 		if mesh == null:
 			continue
@@ -370,7 +377,7 @@ func _build_grass() -> void:
 			var cz := randf_range(-Cfg.WORLD, Cfg.WORLD)
 			var dens := _tint.get_noise_2d(cx * 0.7, cz * 0.7) * 0.5 + 0.5
 			var bm := biome_mix(cx, cz)
-			var allowed := bm.x if spec[0] == "qn_grass_short" else bm.x * 0.6 + bm.y * 0.5
+			var allowed := bm.x if spec[0] == "qn_grass_short" else bm.x * 0.6 + bm.y * 0.4
 			if randf() > allowed or randf() > dens + 0.25 or on_trail(cx, cz, 0.3):
 				continue
 			for k in range(3):
@@ -390,7 +397,7 @@ func _build_grass() -> void:
 		var grass := MultiMeshInstance3D.new()
 		grass.multimesh = mm
 		grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		grass.name = "Grass" if spec[0] == "qn_grass_short" else "GrassWispy"
+		grass.name = "Grass" if spec[0] == "qn_grass_short" else "Clover"
 		_built.add_child(grass)
 
 

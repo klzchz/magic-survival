@@ -14,6 +14,7 @@ const WARD_RADIUS := 6.0      # bone ward repel radius
 const CAULDRON_RADIUS := 4.0  # how close you must stand to brew
 const RUINS_RADIUS := 12.0    # fallen-college ruins area radius
 const INTERACT_RADIUS := 2.8  # reach for E
+const FOCUS_RADIUS := 6.0     # E highlights / walks to targets this close
 const PORTAL_RADIUS := 3.5    # reach to touch the Portal
 const PORTAL_HEARTS := 3      # Mist Hearts needed to reopen the Arcane Portal
 const SHADOW_CAP := 40        # max Shadows alive at once

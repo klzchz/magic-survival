@@ -196,6 +196,50 @@ func _initialize() -> void:
 	p.position = sap.position
 	w.perform(p, "interact")
 	_check(p.inventory.count("twig") == 1, "sapling gives a twig")
+
+	# ---------- finding resources + clear interaction feedback ----------
+	var near := {"grass_tuft": 0, "sapling": 0, "flint": 0}
+	var steep := 0
+	var wrong_biome := 0
+	for g in w.resources():
+		var k: String = g.item_id if g.kind == "item" else g.kind
+		if near.has(k) and Vector2(g.position.x, g.position.z).length() < 26.0:
+			near[k] += 1
+		if k in ["grass_tuft", "sapling", "flint", "dry_shrub"]:
+			if w.terrain.slope(g.position.x, g.position.z) > 0.9 or w.terrain.is_water(g.position.x, g.position.z):
+				steep += 1
+			if k == "sapling" and g.biome == "desert":  # biome where it spawned (earlier tests move nodes)
+				wrong_biome += 1
+	_check(near.grass_tuft >= 8 and near.sapling >= 6 and near.flint >= 3, "a torch's worth of straw, twigs and flint rings the start (%s)" % str(near))
+	_check(steep == 0, "no gatherable sits on a dune crest, cliff or in water")
+	_check(wrong_biome == 0 and w.resources_of("dry_shrub").size() > 0, "the desert gets dry shrubs (twigs), not saplings")
+	var desert_straw := 0
+	for g in w.resources_of("grass_tuft"):
+		if w.terrain.biome_at(g.position.x, g.position.z) == "desert":
+			desert_straw += 1
+	_check(desert_straw >= 10, "dry straw grows in the desert too")
+	var tuft2 = w.resources_of("grass_tuft")[1]
+	tuft2.position = Vector3(45, 0, -55)
+	_check(w.interact_prompt(tuft2) == "E — Coletar Tufo de palha", "the target shows 'E — Coletar Tufo de palha'")
+	p.position = Vector3(45, 0, -51)  # 4 m away: in focus, out of reach
+	_check(w.interact_target(p) == tuft2, "E targets the nearest resource within focus range")
+	w.perform(p, "interact")
+	_check(tuft2.grown and w._approach == tuft2, "from 4 m, E walks over instead of failing")
+	w._approach = null
+	var stuffed := Inventory.new()
+	for i in range(Inventory.SIZE):
+		stuffed.slots[i] = Inventory.make("rock", Inventory.stack_max("rock"))
+	var bag = p.inventory
+	p.inventory = stuffed
+	_check(w.interact_blocker(p, tuft2).begins_with("Inventário cheio"), "a stuffed bag is the reason given")
+	p.position = tuft2.position
+	w.perform(p, "interact")
+	_check(tuft2.grown and w.resources_of("grass_tuft").has(tuft2), "with a stuffed bag nothing is picked or dropped")
+	p.inventory = bag
+	var tree2 = w.resources_of("tree")[0]
+	_check(w.interact_blocker(p, tree2).contains("Machado"), "a tree without an axe says which tool is needed")
+	_check(bag.can_fit({"grass": 2}) and not stuffed.can_fit({"grass": 1}), "can_fit checks room before picking")
+	_check(Data.item("grass").get("where", "") != "" and Data.item("twig").get("where", "") != "" and Data.item("flint").get("where", "") != "", "materials say where to find them")
 	var fl = w.ground_items("flint")[0]
 	fl.position = Vector3(55, 0, -35)
 	var flint_count: int = w.ground_items("flint").size()

@@ -16,7 +16,7 @@
  "grid_step": 2.0,
  "border_rise": 1.2,
  "grass_short": 7000,
- "grass_wispy": 1800,
+ "grass_wispy": 700,
  "path_width": 2.2,
  "gothic_ponds": 2,
  "biomes": {

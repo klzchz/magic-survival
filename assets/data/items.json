@@ -1,11 +1,12 @@
 {
  "grass": {
-  "name": "Capim",
+  "name": "Palha",
   "stack": 40,
   "fuel": 15,
   "wisp": 10,
   "icon": "grass",
-  "desc": "Combustível leve e material de tochas, armaduras e da cabana. Alimenta o fogo-fátuo (+10)."
+  "desc": "Combustível leve e material de tochas, armaduras e da cabana. Alimenta o fogo-fátuo (+10).",
+  "where": "Tufos de palha dourada (E). Muitos perto da clareira e na beira das trilhas; secos no deserto."
  },
  "twig": {
   "name": "Galho",
@@ -13,32 +14,37 @@
   "fuel": 15,
   "wisp": 25,
   "icon": "twig",
-  "desc": "Base de ferramentas e varinhas. Alimenta o fogo-fátuo (+25) ou a fogueira."
+  "desc": "Base de ferramentas e varinhas. Alimenta o fogo-fátuo (+25) ou a fogueira.",
+  "where": "Mudas no bioma florido e arbustos secos no deserto (E, sem ferramenta)."
  },
  "log": {
   "name": "Tora",
   "stack": 20,
   "fuel": 45,
   "icon": "log",
-  "desc": "Madeira para fogueira, Altar, Caldeirão e cabana. Ótimo combustível (+45 s)."
+  "desc": "Madeira para fogueira, Altar, Caldeirão e cabana. Ótimo combustível (+45 s).",
+  "where": "Árvores, com Machado equipado. Bosques do sul e árvores mortas do gótico."
  },
  "rock": {
   "name": "Pedra",
   "stack": 40,
   "icon": "rock_c",
-  "desc": "Pedra para Altar, Caldeirão, cabana e talismãs."
+  "desc": "Pedra para Altar, Caldeirão, cabana e talismãs.",
+  "where": "Rochas, com Picareta equipada. Em todos os biomas."
  },
  "flint": {
   "name": "Pederneira",
   "stack": 40,
   "icon": "flint",
-  "desc": "Pedra lascada: corta. Necessária para machado e picareta."
+  "desc": "Pedra lascada: corta. Necessária para machado e picareta.",
+  "where": "Pedrinhas cinzentas no chão (E). Perto da clareira, das trilhas e no deserto."
  },
  "bone": {
   "name": "Osso",
   "stack": 40,
   "icon": "bone_a",
-  "desc": "Resto de Errante. Material de magia (ward, cajado, talismã)."
+  "desc": "Resto de Errante. Material de magia (ward, cajado, talismã).",
+  "where": "Restos de Errantes derrotados à noite."
  },
  "essence": {
   "name": "Essência da Névoa",
@@ -47,7 +53,8 @@
   "wisp": 50,
   "icon": "essence",
   "noise": 8,
-  "desc": "Essência da Névoa: +25 mana, +50 fogo-fátuo. Ingrediente mágico. Usar faz ruído (8)."
+  "desc": "Essência da Névoa: +25 mana, +50 fogo-fátuo. Ingrediente mágico. Usar faz ruído (8).",
+  "where": "Errantes derrotados e páginas em branco do grimório."
  },
  "mushroom": {
   "name": "Cogumelo-fantasma",
@@ -57,7 +64,8 @@
   "spoil": 360,
   "cooked": "mushroom_cooked",
   "icon": "mushroom",
-  "desc": "+12 fome, +3 corrupção. Asse na fogueira para comer melhor."
+  "desc": "+12 fome, +3 corrupção. Asse na fogueira para comer melhor.",
+  "where": "Cogumelos brilhantes à sombra, no florido e no gótico."
  },
  "mushroom_cooked": {
   "name": "Cogumelo assado",
@@ -75,7 +83,8 @@
   "spoil": 270,
   "cooked": "berries_cooked",
   "icon": "berries",
-  "desc": "+9 fome. Asse para +2 de vida."
+  "desc": "+9 fome. Asse para +2 de vida.",
+  "where": "Arbustos com frutinhas vermelhas no bioma florido."
  },
  "berries_cooked": {
   "name": "Frutinhas assadas",

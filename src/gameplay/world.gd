@@ -14,6 +14,7 @@ const Data = preload("res://src/core/data.gd")
 const Dev = preload("res://src/core/dev.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
 const Lanna = preload("res://src/core/lanna.gd")
+const Sfx = preload("res://src/core/sfx.gd")
 const SOLID := {"tree": 0.8, "rock": 0.85, "berry_bush": 0.6}   # collision radius per resource kind
 const OBJECTIVES := ["gather", "tool", "fire", "shrine", "page"]
 const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
@@ -96,6 +97,10 @@ var state := "menu"        # menu · select · playing · paused · ended
 var menu = null            # the open OverlayMenu, if any
 var _menu_return := ""     # where "Voltar" from Controles goes
 var last_character := DEFAULT_CHARACTER
+var _approach = null       # resource the local apprentice is walking to (E from afar)
+var _approach_t := 0.0
+var _focus_ring: MeshInstance3D   # highlight under the E target
+var _focus_label: Label3D         # "E — Coletar Tufo de palha" / why it fails
 
 
 func _ready() -> void:
@@ -321,7 +326,7 @@ func start_game(character: String, seed_value := -1) -> void:
 		day_night.t = float(Dev.arg("time"))
 	if Dev.has("scene"):
 		_stage_scene.call_deferred(Dev.arg("scene"))
-	_announce("%s %s chega à ilha. Colete capim, galhos e pederneira." % [local_player.stats.get("name", ""), local_player.stats.get("title", "")])
+	_announce("%s %s chega à ilha. Colete palha dourada, galhos e pederneira (E perto do item)." % [local_player.stats.get("name", ""), local_player.stats.get("title", "")])
 
 
 # ---------- scenery (built once: ground, grass, the forest wall) ----------
@@ -442,11 +447,11 @@ func objective_info() -> Dictionary:
 		return {"title": "Primeiros passos concluídos", "text": "Explore, sobreviva à noite e siga a trilha velha até o Templo do Portal.", "done": true, "fresh": _obj_done_t > 0.0}
 	match OBJECTIVES[objective_step]:
 		"gather":
-			return {"title": "Colete materiais (E)", "text": "Capim %d/3  ·  Galho %d/2" % [mini(p.inventory.count("grass"), 3), mini(p.inventory.count("twig"), 2)], "fresh": _obj_done_t > 0.0}
+			return {"title": "Colete materiais (E)", "text": "Palha %d/3  ·  Galho %d/2" % [mini(p.inventory.count("grass"), 3), mini(p.inventory.count("twig"), 2)], "fresh": _obj_done_t > 0.0}
 		"tool":
 			return {"title": "Fabrique uma ferramenta (Tab)", "text": "Machado: 1 galho + 1 pederneira (pederneira fica no chão)", "fresh": _obj_done_t > 0.0}
 		"fire":
-			return {"title": "Prepare uma fogueira", "text": "Tab › Luz › Fogueira: 3 capim + 2 toras (corte árvores)", "fresh": _obj_done_t > 0.0}
+			return {"title": "Prepare uma fogueira", "text": "Tab › Luz › Fogueira: 3 palha + 2 toras (corte árvores)", "fresh": _obj_done_t > 0.0}
 		"shrine":
 			var dist := Vector2(p.position.x, p.position.z).distance_to(shrine_center)
 			return {"title": "Siga a Trilha das Lanternas", "text": "Santuário da Naga Adormecida: faltam %d m" % int(dist), "fresh": _obj_done_t > 0.0}
@@ -690,33 +695,109 @@ func _generate_world(seed_value := -1) -> void:
 	_build_gothic(gothic_center, gate)
 	_build_desert(desert_center)
 
-	_scatter("flowered", {"rock": 14, "mushroom": 22, "grass_tuft": 40, "sapling": 30, "berry_bush": 16, "flint": 20})
-	_scatter("gothic", {"tree": 26, "rock": 14, "mushroom": 18, "berry_bush": 5, "flint": 10})
-	_scatter("desert", {"rock": 22, "flint": 18, "grass_tuft": 8})
+	# resources come in readable patches: plenty near the start and along the
+	# roads (the first torch never needs a long hunt), sparser in the wild
+	_scatter_start()
+	_scatter("flowered", {"rock": 14, "mushroom": 22, "grass_tuft": 70, "sapling": 50, "berry_bush": 16, "flint": 24})
+	_scatter("gothic", {"tree": 26, "rock": 14, "mushroom": 18, "berry_bush": 5, "flint": 12, "grass_tuft": 24})
+	_scatter("desert", {"rock": 22, "flint": 18, "grass_tuft": 30, "dry_shrub": 30})
+	for path in [trail, old_trail, lamp_road, waystone_path, north_road]:
+		_scatter_verges(path)
 	for i in range(80):
 		var mp := _wild_pos(1.5, "flowered")
 		Models.cull(Models.spawn_variant(decor_root, "meadow", mp, randf_range(0.8, 1.2)), 70.0)
 	randomize()  # gameplay randomness stays unpredictable
 
 
-## Resources of a biome: {kind: count}; flint lies on the ground as items.
+## Resources of a biome: {kind: count}, dropped in patches of 2-5 so a find
+## pays off; flint lies on the ground as items.
 func _scatter(biome: String, counts: Dictionary) -> void:
 	for kind in counts:
-		for i in range(int(counts[kind])):
-			var p := _wild_pos(3.0, biome)
-			if kind == "flint":
-				spawn_item("flint", 1, p)
-			else:
-				_spawn_resource(kind, p)
+		var left := int(counts[kind])
+		while left > 0:
+			var c := _wild_spot(3.0, biome)
+			if c == Vector3.INF:
+				break
+			var n := mini(left, randi_range(2, 5))
+			left -= n
+			for i in range(n):
+				var p := c if i == 0 else _near_pos(c, 4.0, biome)
+				if p != Vector3.INF:
+					_place_resource(kind, p)
 
 
-## A random dry spot in a biome that keeps roads, clearings and landmarks readable.
+## The first finds: straw, twigs, flint and berries ring the clearing.
+func _scatter_start() -> void:
+	for spec in [["grass_tuft", 10], ["sapling", 8], ["flint", 5], ["berry_bush", 3]]:
+		for i in range(int(spec[1])):
+			for _t in range(20):
+				var a := randf() * TAU
+				var r := randf_range(10.0, 24.0)
+				var p := Vector3(cos(a) * r, 0.0, sin(a) * r)
+				if _good_spot(p, "flowered", 1.0):
+					_place_resource(spec[0], p)
+					break
+
+
+## Small clusters beside a road every ~16 m, matching the biome they sit in.
+func _scatter_verges(path: Array) -> void:
+	var by_biome := {"flowered": ["grass_tuft", "sapling", "grass_tuft", "flint"], "gothic": ["grass_tuft", "flint", "mushroom"], "desert": ["grass_tuft", "dry_shrub", "flint"]}
+	for i in range(path.size() - 1):
+		var a: Vector2 = path[i]
+		var b: Vector2 = path[i + 1]
+		var steps := int(a.distance_to(b) / 16.0)
+		var side := Vector2(-(b - a).y, (b - a).x).normalized()
+		for k in range(steps):
+			var at := a.lerp(b, (k + 0.5) / maxf(1.0, steps)) + side * randf_range(4.0, 7.0) * (1.0 if randf() < 0.5 else -1.0)
+			var c := Vector3(at.x, 0.0, at.y)
+			var biome := terrain.biome_at(c.x, c.z)
+			if not _good_spot(c, biome, 1.5):
+				continue
+			var kinds: Array = by_biome.get(biome, by_biome.flowered)
+			for j in range(randi_range(2, 3)):
+				var p := c if j == 0 else _near_pos(c, 2.5, biome)
+				if p != Vector3.INF:
+					_place_resource(kinds.pick_random(), p)
+
+
+func _place_resource(kind: String, p: Vector3) -> void:
+	if kind == "flint":
+		spawn_item("flint", 1, p)
+	else:
+		_spawn_resource(kind, p)
+
+
+## A dry, gentle spot of the given biome (no dune crests, cliffs or water).
+func _good_spot(p: Vector3, biome: String, trail_gap := 3.0) -> bool:
+	if absf(p.x) > Cfg.WORLD - 4.0 or absf(p.z) > Cfg.WORLD - 4.0:
+		return false
+	if terrain.biome_at(p.x, p.z) != biome or not terrain.is_walkable(p.x, p.z) or terrain.is_water(p.x, p.z):
+		return false
+	if terrain.slope(p.x, p.z) > 0.9 or terrain.on_trail(p.x, p.z, trail_gap):
+		return false
+	return true
+
+
+func _near_pos(c: Vector3, spread: float, biome: String) -> Vector3:
+	for _t in range(8):
+		var p := c + Vector3(randf_range(-spread, spread), 0.0, randf_range(-spread, spread))
+		if _good_spot(p, biome, 1.0):
+			return p
+	return Vector3.INF
+
+
+## Like _wild_spot, but always returns a land position (decor placement).
 func _wild_pos(trail_gap := 3.0, biome := "flowered") -> Vector3:
-	for _i in range(60):
+	var p := _wild_spot(trail_gap, biome)
+	return _rand_pos() if p == Vector3.INF else p
+
+
+## A random gentle spot in a biome that keeps roads, clearings and landmarks
+## readable. Vector3.INF when the biome has no room left (caller skips).
+func _wild_spot(trail_gap := 3.0, biome := "flowered") -> Vector3:
+	for _i in range(80):
 		var p := _rand_pos()
-		if terrain.biome_at(p.x, p.z) != biome:
-			continue
-		if terrain.on_trail(p.x, p.z, trail_gap) or p.length() < 9.0:
+		if not _good_spot(p, biome, trail_gap) or p.length() < 9.0:
 			continue
 		var p2 := Vector2(p.x, p.z)
 		if p2.distance_to(shrine_center) < 8.0 or p.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS + 2.0:
@@ -724,7 +805,7 @@ func _wild_pos(trail_gap := 3.0, biome := "flowered") -> Vector3:
 		if p2.distance_to(gothic_center) < 16.0 or p2.distance_to(obelisk_pos) < 6.0 or p2.distance_to(buried_temple) < 10.0:
 			continue
 		return p
-	return _rand_pos()
+	return Vector3.INF
 
 
 func _solid(node: Node3D, radius: float) -> void:
@@ -956,7 +1037,7 @@ func _build_gothic(c: Vector2, gate: Vector2) -> void:
 		Lanna.black_roses(decor_root, _wild_pos(2.0, "gothic"))
 	for i in range(70):  # dark hedges, ferns and wild grass between the ruins
 		var gp := _wild_pos(1.5, "gothic")
-		var hedge := Models.spawn(decor_root, ["qn_bush", "qn_fern", "qn_grass_wispy", "qn_plant_1"].pick_random(), gp, randf_range(0.9, 1.5))
+		var hedge := Models.spawn(decor_root, ["qn_bush", "qn_fern", "qn_plant_1"].pick_random(), gp, randf_range(0.9, 1.5))
 		Models.tint(hedge, Color(0.35, 0.45, 0.42))
 		Models.cull(hedge, 80.0)
 	for i in range(12):  # broken columns and fence remains along the way
@@ -1120,6 +1201,7 @@ func tick(delta: float) -> void:
 	if local_player != null and exploration != null and local_player.position.distance_to(_last_reveal) > 3.0:
 		_last_reveal = local_player.position
 		exploration.reveal(local_player.position)
+	_update_focus()
 	camera_rig.follow(delta)
 	hud.refresh(local_player, self)
 
@@ -1147,6 +1229,19 @@ func _drive_local(delta: float) -> void:
 			local_player.jump()
 		local_player.move(mv, delta)
 		return
+	var manual := Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_D) \
+			or Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_RIGHT)
+	if _approach != null:
+		_approach_t -= delta
+		if manual or _approach_t <= 0.0 or not is_instance_valid(_approach) or not _approach.is_inside_tree() or not _approach.grown:
+			_approach = null
+		elif _hdist(local_player.position, _approach.position) <= Cfg.INTERACT_RADIUS * 0.8:
+			_approach = null
+			_interact(local_player)
+		else:
+			var to: Vector3 = _approach.position - local_player.position
+			local_player.move(Vector3(to.x, 0, to.z).normalized(), delta)
+			return
 	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
 		mv += camera_rig.forward()
 	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
@@ -1249,6 +1344,23 @@ func _stage_scene(scene: String) -> void:
 		"camp":
 			give(p, {"grass": 6, "log": 4, "rock": 6, "flint": 4, "twig": 6})
 			craft(p, "campfire")
+		"gather", "nogear":
+			# the interaction prompt over the nearest straw / tree, a gain pop-up
+			# and the Light tab with live ingredient counts
+			var kind := "grass_tuft" if scene == "gather" else "tree"
+			var best = null
+			for g in resources_of(kind):
+				if best == null or _hdist(g.position, p.position) < _hdist(best.position, p.position):
+					best = g
+			if best != null:
+				var off := Vector3(2.2, 0, 2.2) if kind == "tree" else Vector3(1.6, 0, 1.6)
+				p.position = terrain.on_ground(best.position + off)
+				p.face(best.position)
+			give(p, {"grass": 1, "twig": 2})
+			_pop(p.position + Vector3(0, 2.4, 0), "+1 Palha", Color(0.75, 1.0, 0.6))
+			hud.toggle_crafting()
+			hud._select_tab("Luz")
+			camera_rig.zoom = 0.8
 		"trail", "walk":
 			# stand on the Lantern Trail looking toward the shrine
 			var t0: Vector2 = trail[0]
@@ -1577,32 +1689,75 @@ func _alt_use(p, i: int) -> void:
 		_say(p, "Largou: %s" % Data.item_name(stack.id))
 
 
-func _interact(p) -> void:
-	# E / Space: pick, chop (axe), mine (pickaxe), grab loot, or touch the Portal
+static func _hdist(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+## The resource E would act on: nearest grown one within FOCUS_RADIUS
+## (horizontal distance, so slopes and hops don't hide it).
+func interact_target(p):
 	var best = null
-	var bd := Cfg.INTERACT_RADIUS
+	var bd := Cfg.FOCUS_RADIUS
 	for g in resources():
 		if not g.grown:
 			continue
-		var d: float = p.position.distance_to(g.position)
+		var d := _hdist(p.position, g.position)
 		if d < bd:
 			bd = d
 			best = g
+	return best
+
+
+## Why E on `g` would fail right now ("" = it works). Distance is not a
+## blocker: the apprentice walks over first.
+func interact_blocker(p, g) -> String:
+	var tool: String = g.tool_needed()
+	if tool != "" and p.inventory.hand_data().get("tool", "") != tool:
+		return "Precisa de %s (crie em Tab → Ferramentas)" % ("um Machado equipado" if tool == "axe" else "uma Picareta equipada")
+	if g.kind == "item" and not g.item_stack.is_empty():
+		if p.inventory.space_for(g.item_stack.get("id", "")) <= 0 and not p.inventory.slots.has(null):
+			return "Inventário cheio: use ou largue algo (botão direito no item)"
+	elif g.kind != "page" and (tool == "" or g.hp <= int(p.perk("strike_power"))) and not p.inventory.can_fit(g.gives()):
+		return "Inventário cheio: use ou largue algo (botão direito no item)"
+	return ""
+
+
+## Prompt shown over the target: "E — Coletar Tufo de palha".
+func interact_prompt(g) -> String:
+	var text := "E — %s %s" % [g.verb(), g.display_name()]
+	if g.tool_needed() != "":
+		text += "  (%d golpe%s)" % [g.hp, "" if g.hp == 1 else "s"]
+	return text
+
+
+func _interact(p) -> void:
+	# E: pick, chop (axe), mine (pickaxe), grab loot, or touch the Portal
+	var best = interact_target(p)
+	var bd: float = _hdist(p.position, best.position) if best != null else Cfg.FOCUS_RADIUS
 	if portal != null:
-		var pd: float = p.position.distance_to(portal.position)
+		var pd: float = _hdist(p.position, portal.position)
 		if pd < Cfg.PORTAL_RADIUS and pd < bd:
 			_try_portal(p)
 			return
 	if best == null:
-		_say(p, "Nada por perto")
+		_deny(p, "Nada para coletar por perto: procure palha dourada, mudas e pedrinhas")
+		return
+	var why := interact_blocker(p, best)
+	if why != "":
+		p.face(best.position)
+		_deny(p, why, best.position)
+		return
+	if bd > Cfg.INTERACT_RADIUS:
+		if p == local_player:  # walk over, then act (cancelled by WASD)
+			_approach = best
+			_approach_t = 4.0
+		else:
+			_deny(p, "Longe demais: chegue mais perto", best.position)
 		return
 
 	var kind: String = best.kind
 	var tool: String = best.tool_needed()
 	p.face(best.position)
-	if tool != "" and p.inventory.hand_data().get("tool", "") != tool:
-		_say(p, "Precisa de %s equipado" % ("um Machado" if tool == "axe" else "uma Picareta"))
-		return
 	p.play_action("chop" if tool != "" else "pickup")
 	if tool != "":
 		var broke: String = p.inventory.wear("hand", 1.0)
@@ -1611,21 +1766,20 @@ func _interact(p) -> void:
 			_say(p, "%s quebrou!" % Data.item_name(broke))
 	var power: int = int(p.perk("strike_power")) if tool != "" else 1
 	if not best.strike(power):
-		_say(p, "Golpeou: %s (%d)" % [best.display_name(), best.hp])
+		_sfx(p, "thud")
+		_pop(best.position + Vector3(0, 2.2, 0), "%s: falta%s %d golpe%s" % [best.display_name(), "" if best.hp == 1 else "m", best.hp, "" if best.hp == 1 else "s"], Color(1.0, 0.9, 0.7))
 		return
 	if kind == "page":
 		_despawn(best)
 		obj_flags["found_page"] = true
 		_learn_next_spell(p)
 		discover("page")
+		_sfx(p, "craft")
 		return
 	if kind == "item" and not best.item_stack.is_empty():
-		if not p.inventory.put_stack(best.item_stack):  # keeps durability / freshness
-			best.hp = 1
-			_say(p, "Inventário cheio")
-			return
+		p.inventory.put_stack(best.item_stack)  # keeps durability / freshness
 		_despawn(best)
-		_say(p, "Pegou: %s" % best.display_name())
+		_gain(p, best.position, {best.item_stack.get("id", ""): int(best.item_stack.get("count", 1))})
 		return
 	var loot: Dictionary = best.gives()
 	give(p, loot)
@@ -1635,10 +1789,93 @@ func _interact(p) -> void:
 		_despawn(best)
 		if kind == "tree":  # the forest renews: a sapling sprouts at the stump
 			_spawn_resource("sapling", best.position)
+	_gain(p, best.position, loot)
+
+
+## Success feedback: "+2 Palha" floating up, a sparkle and a chime.
+func _gain(p, at: Vector3, loot: Dictionary) -> void:
 	var parts := []
 	for id in loot:
-		parts.append("+%d %s" % [loot[id], Data.item_name(id)])
-	_say(p, ", ".join(parts))
+		parts.append("+%d %s" % [int(loot[id]), Data.item_name(id)])
+	var text := "  ".join(parts)
+	_say(p, text)
+	if p == local_player:
+		_pop(p.position + Vector3(0, 2.4, 0), text, Color(0.75, 1.0, 0.6))
+		Fx.magic_puff(decor_root, at, Color(1.0, 0.9, 0.5), 14)
+		_sfx(p, "pickup")
+
+
+## Failure feedback: the specific reason, in red, with a short buzz.
+func _deny(p, reason: String, at := Vector3.INF) -> void:
+	_say(p, reason)
+	if p == local_player:
+		_pop((p.position if at == Vector3.INF else at) + Vector3(0, 2.2, 0), reason, Color(1.0, 0.55, 0.45))
+		_sfx(p, "deny")
+
+
+func _sfx(p, cue: String) -> void:
+	if p == local_player:
+		Sfx.play(self, cue)
+
+
+## A world-space text that rises and fades (frees itself).
+func _pop(at: Vector3, text: String, c: Color) -> void:
+	if not is_inside_tree():
+		return
+	var l := Label3D.new()
+	l.text = text
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.no_depth_test = true
+	l.font_size = 44
+	l.outline_size = 12
+	l.pixel_size = 0.006
+	l.modulate = c
+	l.position = at
+	add_child(l)
+	var tw := l.create_tween().set_parallel(true)
+	tw.tween_property(l, "position:y", at.y + 1.2, 1.1).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 1.1).set_delay(0.4)
+	tw.chain().tween_callback(l.queue_free)
+
+
+## Highlights what E would act on, with its prompt or why it can't.
+func _update_focus() -> void:
+	if _focus_ring == null:
+		_focus_ring = MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.62
+		torus.outer_radius = 0.72
+		_focus_ring.mesh = torus
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = Color(1.0, 0.85, 0.4)
+		m.no_depth_test = true
+		_focus_ring.material_override = m
+		add_child(_focus_ring)
+		_focus_label = Label3D.new()
+		_focus_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_focus_label.no_depth_test = true
+		_focus_label.font_size = 56
+		_focus_label.outline_size = 14
+		_focus_label.pixel_size = 0.005
+		add_child(_focus_label)
+	var g = null
+	if local_player != null and not local_player.dead and not map_open() and placing == "":
+		g = interact_target(local_player)
+	_focus_ring.visible = g != null
+	_focus_label.visible = g != null
+	if g == null:
+		hud.set_prompt("", true)
+		return
+	var big: bool = g.kind == "tree" or g.kind == "rock"
+	var why := interact_blocker(local_player, g)
+	_focus_ring.position = g.position + Vector3(0, 0.08, 0)
+	_focus_ring.scale = Vector3.ONE * (1.8 if big else 1.0)
+	(_focus_ring.material_override as StandardMaterial3D).albedo_color = Color(1.0, 0.85, 0.4) if why == "" else Color(1.0, 0.45, 0.35)
+	_focus_label.position = g.position + Vector3(0, 4.6 if big else 1.9, 0)
+	_focus_label.text = interact_prompt(g) if why == "" else "✕ " + why.get_slice(" (", 0).get_slice(":", 0)  # full reason: HUD prompt
+	_focus_label.modulate = Color(1.0, 0.95, 0.8) if why == "" else Color(1.0, 0.6, 0.5)
+	hud.set_prompt(interact_prompt(g) if why == "" else "%s: %s" % [g.display_name(), why], why == "")
 
 
 func _learn_next_spell(p) -> void:

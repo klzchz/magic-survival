@@ -61,6 +61,38 @@ func add(id: String, count := 1) -> int:
 	return left
 
 
+## How many more of `id` fit in the bag (partial stacks + free slots).
+func space_for(id: String) -> int:
+	var cap := stack_max(id)
+	var n := 0
+	for s in slots:
+		if s == null:
+			n += cap
+		elif s.id == id:
+			n += maxi(0, cap - int(s.count))
+	return n
+
+
+## True when every item of a loot table fits (checked as if added together).
+func can_fit(items: Dictionary) -> bool:
+	var free := 0
+	for s in slots:
+		if s == null:
+			free += 1
+	for id in items:
+		var need := int(items[id])
+		var cap := stack_max(id)
+		for s in slots:
+			if s != null and s.id == id:
+				need -= maxi(0, cap - int(s.count))
+		if need > 0:
+			var slots_needed := int(ceil(float(need) / float(cap)))
+			if slots_needed > free:
+				return false
+			free -= slots_needed
+	return true
+
+
 ## Puts an existing stack (keeps durability/freshness) into the first free slot.
 func put_stack(stack: Dictionary) -> bool:
 	for i in range(SIZE):

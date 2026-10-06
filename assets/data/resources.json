@@ -1,11 +1,12 @@
 {
  "grass_tuft": {
-  "name": "Tufo de capim",
+  "name": "Tufo de palha",
   "hp": 1,
   "gives": {
    "grass": 1
   },
-  "regrow": 120
+  "regrow": 120,
+  "verb": "Coletar"
  },
  "sapling": {
   "name": "Muda",
@@ -15,7 +16,8 @@
   },
   "regrow": 120,
   "grows_into": "tree",
-  "grow_time": 300
+  "grow_time": 300,
+  "verb": "Colher galho de"
  },
  "berry_bush": {
   "name": "Arbusto de frutinhas",
@@ -23,7 +25,8 @@
   "gives": {
    "berries": 2
   },
-  "regrow": 150
+  "regrow": 150,
+  "verb": "Colher"
  },
  "mushroom": {
   "name": "Cogumelo-fantasma",
@@ -31,7 +34,8 @@
   "gives": {
    "mushroom": 1
   },
-  "regrow": 180
+  "regrow": 180,
+  "verb": "Colher"
  },
  "tree": {
   "name": "Árvore",
@@ -39,7 +43,8 @@
   "gives": {
    "log": 2
   },
-  "tool": "axe"
+  "tool": "axe",
+  "verb": "Cortar"
  },
  "rock": {
   "name": "Rocha",
@@ -48,16 +53,28 @@
    "rock": 2,
    "flint": 1
   },
-  "tool": "pickaxe"
+  "tool": "pickaxe",
+  "verb": "Minerar"
  },
  "page": {
   "name": "Página do grimório",
   "hp": 1,
-  "gives": {}
+  "gives": {},
+  "verb": "Ler"
  },
  "item": {
   "name": "Item",
   "hp": 1,
-  "gives": {}
+  "gives": {},
+  "verb": "Pegar"
+ },
+ "dry_shrub": {
+  "name": "Arbusto seco",
+  "hp": 1,
+  "gives": {
+   "twig": 1
+  },
+  "regrow": 150,
+  "verb": "Colher galho de"
  }
 }

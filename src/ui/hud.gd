@@ -42,6 +42,7 @@ var obj_panel: Panel
 var obj_title: Label
 var obj_text: Label
 var _craft_refresh_t := 0.0
+var lbl_prompt: Label            # "E — Coletar Tufo de palha" (or why it fails)
 
 
 func _panel_style(alpha := 0.62, radius := 8) -> StyleBoxFlat:
@@ -89,7 +90,12 @@ func _ready() -> void:
 	lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
 	lbl_msg.visible = false
 
-	var hint := _label(root, "WASD mover · Espaço saltar · Q/PgUp câmera · roda zoom · E agir · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · M mapa · F11 tela cheia", Vector2(140, 624), 12)
+	lbl_prompt = _label(root, "", Vector2(240, 500), 22, title_font)
+	lbl_prompt.size = Vector2(800, 40)
+	lbl_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_prompt.visible = false
+
+	var hint := _label(root, "WASD mover · Espaço saltar · Q/PgUp câmera · roda zoom · E coletar · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · M mapa", Vector2(140, 624), 12)
 	hint.size = Vector2(1000, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color(0.85, 0.82, 0.75, 0.75))
@@ -339,14 +345,30 @@ func _select_tab(tab: String) -> void:
 		btn.add_child(icon)
 		var nm := _label(btn, Data.display_name(rid), Vector2(60, 4), 15, title_font)
 		nm.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
-		var parts := []
+		# one row per ingredient: icon · name · have/need (refreshed live)
+		var rows := {}
+		var y := 28.0
 		for k in r.cost:
-			parts.append("%d %s" % [int(r.cost[k]), Data.item_name(k)])
-		var cost := _label(btn, ", ".join(parts), Vector2(60, 26), 11)
-		cost.size = Vector2(230, 30)
-		cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			var ic := TextureRect.new()
+			ic.position = Vector2(60, y)
+			ic.size = Vector2(20, 20)
+			ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ic.texture = icons.get_icon(Data.item(k).get("icon", k))
+			btn.add_child(ic)
+			rows[k] = _label(btn, "%s  0/%d" % [Data.item_name(k), int(r.cost[k])], Vector2(84, y + 1), 13)
+			y += 22.0
+		var why_lbl := _label(btn, "", Vector2(8, y + 2), 11)
+		why_lbl.size = Vector2(282, 34)
+		why_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		btn.custom_minimum_size = Vector2(296, y + 40)
+		var tip := [Data.display_name(rid) + ": " + Data.describe(rid)]
+		for k in r.cost:
+			tip.append("%s: %s" % [Data.item_name(k), Data.item(k).get("where", "")])
+		btn.tooltip_text = "\n".join(tip)
 		craft_list.add_child(btn)
-		craft_buttons[rid] = {"button": btn, "cost": cost}
+		craft_buttons[rid] = {"button": btn, "rows": rows, "cost": r.cost, "why": why_lbl}
 	_craft_refresh_t = 0.0
 
 
@@ -354,8 +376,20 @@ func _refresh_crafting(p) -> void:
 	for rid in craft_buttons:
 		var why: String = world.craft_blocker(p, rid)
 		var v: Dictionary = craft_buttons[rid]
-		v.button.modulate = Color(1, 1, 1, 1) if why == "" else Color(1, 1, 1, 0.55)
-		v.cost.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if why == "" else Color(1.0, 0.65, 0.55))
+		v.button.modulate = Color(1, 1, 1, 1) if why == "" else Color(1, 1, 1, 0.8)
+		var hint := ""
+		for k in v.rows:
+			var have: int = p.inventory.count(k)
+			var need := int(v.cost[k])
+			var lbl: Label = v.rows[k]
+			lbl.text = "%s  %d/%d" % [Data.item_name(k), mini(have, need), need]
+			lbl.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if have >= need else Color(1.0, 0.65, 0.55))
+			if have < need and hint == "":
+				hint = "Falta %s: %s" % [Data.item_name(k), String(Data.item(k).get("where", "")).get_slice(".", 0)]
+		v.why.text = hint if hint != "" else ("" if why == "" else why)
+		v.why.add_theme_color_override("font_color", Color(1.0, 0.8, 0.55) if why != "" else Color(0.6, 1.0, 0.6))
+		if why == "":
+			v.why.text = "Pronto: clique para criar"
 
 
 # ---------- per-frame refresh ----------
@@ -365,6 +399,15 @@ func _process(delta: float) -> void:
 		msg_t -= delta
 		if msg_t <= 0.0:
 			lbl_msg.visible = false
+
+
+## Bottom-centre prompt for the E target; red when it can't be done.
+func set_prompt(text: String, ok: bool) -> void:
+	if lbl_prompt == null:
+		return
+	lbl_prompt.visible = text != ""
+	lbl_prompt.text = text
+	lbl_prompt.add_theme_color_override("font_color", Color(1.0, 0.92, 0.7) if ok else Color(1.0, 0.6, 0.5))
 
 
 func flash(m: String, seconds := 2.6) -> void:
