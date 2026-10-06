@@ -14,8 +14,9 @@ arcane world. Values live in `assets/data/*.json` (data-driven, tune there).
 | Torch, grass armor | Tocha (hand light, burns over time), Armadura de Grama (absorbs 60%) |
 | Science Machine prototyping | Altar Arcano unlocks the Magia tab; Caldeirão unlocks Alquimia |
 | Darkness (Charlie) | The Mist wounds you at night with no light (wisp empty, no torch/fire) |
-| Sanity + shadow creatures | Corrupção: raw magic/food raises it, more Shadows spawn |
-| Nightmare fuel | Essência da Névoa (spell-killed Shadows) |
+| Sanity + shadow creatures | Corrupção: raw magic/food raises it, slightly more Errantes |
+| (new) Hunted for your magic | **Arcane noise** (option B, Lucas 2026-10-06): spells, potions, essence and magic crafting raise a 0-100 noise meter that fades 6/s. Errantes sense you within 10m; noise lets them hear you up to 40m. Night spawns: a few base Errantes, many more when someone is loud, born near the loudest apprentice. Unaware Errantes wander. The Blood Moon horror always hunts. A violet ring on the ground telegraphs each noise. Tuning: `assets/data/night.json`. |
+| Nightmare fuel | Essência da Névoa (spell-killed Errantes) |
 | Character select with perks | 3 apprentices (below) |
 
 ## Characters

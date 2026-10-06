@@ -251,6 +251,45 @@ func pillars() -> Array:
 	return _children(decor_root).filter(func(n): return n.has_meta("ruin"))
 
 
+## Who an Errante at `pos` is hunting: the nearest apprentice it can sense
+## (close by) or hear (arcane noise carries far). null = nobody, it wanders.
+func errante_target(pos: Vector3):
+	var best = null
+	var bd := INF
+	for p in alive_players():
+		var flat: Vector3 = p.position - pos
+		flat.y = 0.0
+		var d := flat.length()
+		if d <= p.heard_from() and d < bd:
+			bd = d
+			best = p
+	return best
+
+
+## The loudest living apprentice (Errantes gather around them).
+func loudest_player():
+	var best = null
+	for p in alive_players():
+		if best == null or p.noise > best.noise:
+			best = p
+	return best
+
+
+func _max_noise() -> float:
+	var m := 0.0
+	for p in alive_players():
+		m = maxf(m, p.noise)
+	return m
+
+
+## Magic acts are loud: raise the apprentice's noise and show the ring.
+func emit_noise(p, amount: float) -> void:
+	if amount <= 0.0:
+		return
+	p.make_noise(amount)
+	Fx.noise_ring(self, p.position, p.heard_from())
+
+
 func nearest_player(pos: Vector3):
 	var best = null
 	var bd := INF
@@ -320,7 +359,7 @@ func _spawn_spot(slot: int) -> Vector3:
 
 
 func spawn_shadow(boss := false):
-	var anchor = nearest_player(Vector3.ZERO) if local_player == null or local_player.dead else local_player
+	var anchor = loudest_player()
 	var center: Vector3 = anchor.position if anchor != null else Vector3.ZERO
 	var ang := randf_range(0.0, TAU)
 	var pos := center + Vector3(cos(ang), 0, sin(ang)) * (16.0 + randf_range(4.0, 14.0))
@@ -517,9 +556,11 @@ func tick(delta: float) -> void:
 		if not g.grown:
 			g.tick_regrow(delta)
 
-	# Shadows rise at night; corruption and the Blood Moon make them thicker
-	if night and shadows_root.get_child_count() < Cfg.SHADOW_CAP:
-		var rate := 0.5 + _team_corruption() * 0.03
+	# Errantes rise at night: a few always, many more where magic is loud
+	var loud := _max_noise()
+	var cap := int(float(Data.night("cap_base", 5)) + loud * float(Data.night("cap_per_noise", 0.3)))
+	if night and shadows_root.get_child_count() < mini(cap, Cfg.SHADOW_CAP):
+		var rate: float = float(Data.night("base_rate", 0.12)) + loud * float(Data.night("noise_rate", 0.03)) + _team_corruption() * float(Data.night("corruption_rate", 0.01))
 		if day_night.blood_moon:
 			rate *= 2.0
 		if randf() < rate * delta:
@@ -580,9 +621,9 @@ func _on_night_start(blood_moon: bool) -> void:
 		_announce("LUA DE SANGUE! Algo grande caça vocês esta noite.")
 		spawn_shadow(true)
 	elif day_night.nights == 0:
-		hud.flash("A primeira noite! Sombras surgem da escuridão e caçam você. A LUZ as queima: fique perto do fogo-fátuo, de uma tocha ou de uma fogueira. Sem luz nenhuma, a própria Névoa fere.", 9.0)
+		hud.flash("Primeira noite: os ERRANTES despertam e caçam MAGIA. Quieto, eles só te notam de perto. Cada feitiço ou poção faz RUÍDO e os atrai de longe. A luz os queima, mas sem luz nenhuma a Névoa fere.", 10.0)
 	else:
-		_announce("A Névoa desce. Fique perto da luz.")
+		_announce("A Névoa desce. Errantes vagam: cuidado com o ruído da magia.")
 
 
 func _on_dawn(nights: int) -> void:
@@ -605,7 +646,7 @@ func _on_shadow_death(s) -> void:
 		for id in DROP_TABLE:
 			if randf() < DROP_TABLE[id]:
 				spawn_item(id, 1, at + Vector3(randf_range(-0.8, 0.8), 0, randf_range(-0.8, 0.8)))
-		_say(who, "A Sombra se desfez e deixou restos")
+		_say(who, "O Errante se desfez e deixou restos")
 	_despawn(s)
 
 
@@ -639,7 +680,10 @@ func perform(p, action: String) -> void:
 		"interact":
 			_interact(p)
 		"use":
+			var before: float = p.noise
 			_say(p, p.use_slot(int(parts[1])))
+			if p.noise > before + 0.5:  # potions / essence are loud: show it
+				Fx.noise_ring(self, p.position, p.heard_from())
 		"alt":
 			_alt_use(p, int(parts[1]))
 		"craft":
@@ -675,6 +719,8 @@ func craft(p, rid: String) -> bool:
 	var r := Data.recipe(rid)
 	p.inventory.pay(r.cost)
 	p.play_action("build")
+	if Data.tab_tech(r.tab) != "" or rid == "altar" or rid == "ward":  # magic work hums
+		emit_noise(p, float(Data.night("noise", {}).get("magic_build" if r.get("structure", false) else "magic_craft", 12)))
 	if r.get("structure", false):
 		var fwd: Vector3 = camera_rig.forward() if p == local_player else Vector3(0, 0, 1)
 		var mult: float = p.perk("fire_mult") if rid == "campfire" else 1.0
@@ -773,7 +819,7 @@ func _interact(p) -> void:
 func _learn_next_spell(p) -> void:
 	match meta.learn_next():
 		"lume":
-			_announce("Aprenderam LUME (Z): explosão de luz que queima Sombras próximas")
+			_announce("Aprenderam LUME (Z): explosão de luz que queima Errantes próximos (barulhento!)")
 		"escudo":
 			_announce("Aprenderam ESCUDO (X): barreira que bloqueia dano por 6s")
 		"eco":
@@ -805,6 +851,7 @@ func _cast_bolt(p) -> void:
 		return
 	p.mana -= cost
 	p.corrupt(5.0)
+	emit_noise(p, float(Data.night("noise", {}).get("bolt", 18)))
 	var best = null
 	var bd := 16.0
 	for s in shadows():
@@ -825,7 +872,7 @@ func _cast_bolt(p) -> void:
 	best.last_hitter = p
 	p.face(best.position)
 	p.play_action("bolt")
-	_say(p, "Feitiço atinge a Sombra" + (" GRANDE" if best.boss else ""))
+	_say(p, "Feitiço atinge o Errante" + (" GIGANTE" if best.boss else ""))
 
 
 func _cast_lume(p) -> void:
@@ -837,6 +884,7 @@ func _cast_lume(p) -> void:
 		return
 	p.mana -= 15.0
 	p.corrupt(3.0)
+	emit_noise(p, float(Data.night("noise", {}).get("lume", 30)))
 	var burned := 0
 	for s in shadows():
 		if s.position.distance_to(p.position) < 10.0:
@@ -845,7 +893,7 @@ func _cast_lume(p) -> void:
 			burned += 1
 	p.wisp = minf(100.0, p.wisp + 10.0)
 	p.play_action("lume")
-	_say(p, "LUME! Luz explode (%d Sombras queimadas)" % burned)
+	_say(p, "LUME! Luz explode (%d Errantes queimados)" % burned)
 
 
 func _cast_shield(p) -> void:
@@ -857,6 +905,7 @@ func _cast_shield(p) -> void:
 		return
 	p.mana -= 25.0
 	p.shield_t = 6.0
+	emit_noise(p, float(Data.night("noise", {}).get("shield", 14)))
 	p.play_action("shield")
 	_say(p, "ESCUDO! Nada te toca por 6 segundos")
 

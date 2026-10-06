@@ -35,6 +35,7 @@ var wisp := 100.0          # the wisp companion's light fuel
 var inventory: Inventory
 var shield_t := 0.0        # seconds of Escudo remaining
 var dark_t := 0.0          # seconds spent in total darkness at night
+var noise := 0.0           # arcane noise 0..100: magic use draws the Errantes
 var dead := false
 var wisp_light: OmniLight3D
 var terrain = null         # set by the world: ground height + lakes
@@ -111,6 +112,7 @@ func respawn(at: Vector3, eco: bool) -> void:
 	wisp = 100.0
 	shield_t = 0.0
 	dark_t = 0.0
+	noise = 0.0
 	dead = false
 	visible = true
 	if rig != null:
@@ -147,6 +149,7 @@ func tick_stats(delta: float) -> String:
 	wisp = maxf(0.0, wisp - 1.5 * delta)
 	corruption = maxf(0.0, corruption - 0.4 * delta)
 	shield_t = maxf(0.0, shield_t - delta)
+	noise = maxf(0.0, noise - float(Data.night("noise_decay", 6.0)) * delta)
 	if inventory.tick_spoil(delta) > 0:
 		note = "Alguma comida apodreceu"
 	if inventory.hand_id() == "torch":
@@ -231,6 +234,16 @@ func hurt(dps: float, delta: float) -> void:
 		play_action("hurt")
 
 
+## Magic is loud: raises the arcane noise the Errantes hear (see night.json).
+func make_noise(amount: float) -> void:
+	noise = clampf(noise + amount, 0.0, 100.0)
+
+
+## How far away an Errante hears this apprentice right now.
+func heard_from() -> float:
+	return maxf(float(Data.night("sense_radius", 10.0)), float(Data.night("hear_radius", 40.0)) * noise / 100.0)
+
+
 func corrupt(amount: float) -> void:
 	corruption = clampf(corruption + amount, 0.0, 100.0)
 
@@ -262,6 +275,7 @@ func use_slot(i: int) -> String:
 		return _consume(i, d)
 	if s.id == "essence":
 		inventory.take_from(i)
+		make_noise(float(d.get("noise", 0.0)))
 		mana = minf(mana_max, mana + float(d.mana))
 		wisp = minf(100.0, wisp + float(d.wisp))
 		play_action("use")
@@ -276,6 +290,7 @@ func use_slot(i: int) -> String:
 
 func _consume(i: int, d: Dictionary) -> String:
 	inventory.take_from(i)
+	make_noise(float(d.get("noise", 0.0)))
 	var mult := perk("potion_mult") if d.get("potion", false) else 1.0
 	hunger = minf(hunger_max, hunger + float(d.get("hunger", 0.0)))
 	heal(float(d.get("health", 0.0)) * mult)

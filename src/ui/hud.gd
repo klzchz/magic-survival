@@ -18,6 +18,7 @@ const ROWS := [
 	["mana", "Mana", Color(0.35, 0.60, 0.95)],
 	["corruption", "Corrupção", Color(0.60, 0.20, 0.70)],
 	["wisp", "Fogo-fátuo", Color(1.00, 0.75, 0.40)],
+	["noise", "Ruído", Color(0.72, 0.42, 1.00)],
 ]
 
 var world = null
@@ -101,7 +102,7 @@ func _ready() -> void:
 func _build_status(root: Control) -> void:
 	var panel := Panel.new()
 	panel.position = Vector2(10, 10)
-	panel.size = Vector2(330, 172)
+	panel.size = Vector2(330, 196)
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", _panel_style())
 	root.add_child(panel)
@@ -244,8 +245,8 @@ func _fill_slot(view: Dictionary, s) -> void:
 
 func _build_crafting(root: Control) -> void:
 	craft_panel = Panel.new()
-	craft_panel.position = Vector2(10, 192)
-	craft_panel.size = Vector2(330, 438)
+	craft_panel.position = Vector2(10, 216)
+	craft_panel.size = Vector2(330, 400)
 	craft_panel.add_theme_stylebox_override("panel", _panel_style(0.72))
 	root.add_child(craft_panel)
 	var head := _label(craft_panel, "Criação  (Tab)", Vector2(12, 6), 16, title_font)
@@ -265,7 +266,7 @@ func _build_crafting(root: Control) -> void:
 		tab_buttons[tab_name] = b
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(8, 104)
-	scroll.size = Vector2(314, 326)
+	scroll.size = Vector2(314, 288)
 	craft_panel.add_child(scroll)
 	craft_list = VBoxContainer.new()
 	craft_list.custom_minimum_size = Vector2(300, 0)
@@ -365,6 +366,7 @@ func refresh(p, w) -> void:
 	_fill("mana", p.mana, p.mana_max)
 	_fill("corruption", p.corruption, 100.0)
 	_fill("wisp", p.wisp, 100.0)
+	_fill("noise", p.noise, 100.0)
 	lbl_who.text = "%s, %s" % [p.stats.get("name", ""), p.stats.get("title", "")]
 	var dn = w.day_night
 	var lit: float = dn.light()

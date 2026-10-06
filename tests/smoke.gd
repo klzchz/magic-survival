@@ -266,6 +266,34 @@ func _initialize() -> void:
 	w.tick(0.05)
 	_check(w.ground_items("bone").size() == bones_on_ground + 1, "a spell-killed Shadow drops a bone on the ground")
 
+	# ---------- option B: Errantes hunt magic (arcane noise) ----------
+	p.position = Vector3(10, 0, 10)
+	p.noise = 0.0
+	var lurker = w.spawn_shadow()
+	lurker.position = p.position + Vector3(20, 1, 0)
+	_check(w.errante_target(lurker.position) == null, "a quiet apprentice 20m away goes unnoticed")
+	var close = w.spawn_shadow()
+	close.position = p.position + Vector3(6, 1, 0)
+	_check(w.errante_target(close.position) == p, "up close, Errantes sense you even when quiet")
+	p.mana = 100.0
+	w.perform(p, "bolt")
+	_check(is_equal_approx(p.noise, 18.0), "a spell bolt makes 18 arcane noise")
+	p.noise = 80.0
+	_check(w.errante_target(lurker.position) == p, "loud magic is heard from far away (80 noise = 32m)")
+	p.tick_stats(5.0)
+	_check(is_equal_approx(p.noise, 50.0), "arcane noise fades while you stay quiet (6/s)")
+	p.inventory.add("mana_potion", 1)
+	p.noise = 0.0
+	for i in range(Inventory.SIZE):
+		if p.inventory.slots[i] != null and p.inventory.slots[i].id == "mana_potion":
+			w.perform(p, "use:%d" % i)
+	_check(p.noise > 0.0, "drinking a potion is loud too")
+	var pos_before: Vector3 = lurker.position
+	p.noise = 0.0
+	_force_night(w)
+	w.tick(0.5)
+	_check(lurker.position.distance_to(pos_before) > 0.01 and w.errante_target(lurker.position) == null, "unaware Errantes wander instead of hunting")
+
 	# ---------- Blood Moon boss, Portal ----------
 	w.restart()
 	p = w.local_player

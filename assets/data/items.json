@@ -39,7 +39,8 @@
   "stack": 40,
   "mana": 25,
   "wisp": 50,
-  "icon": "essence"
+  "icon": "essence",
+  "noise": 8
  },
  "mushroom": {
   "name": "Cogumelo-fantasma",
@@ -120,21 +121,24 @@
   "stack": 10,
   "health": 40,
   "potion": true,
-  "icon": "bottle_A_green"
+  "icon": "bottle_A_green",
+  "noise": 10
  },
  "mana_potion": {
   "name": "Poção de Mana",
   "stack": 10,
   "mana": 60,
   "potion": true,
-  "icon": "bottle_B_green"
+  "icon": "bottle_B_green",
+  "noise": 12
  },
  "clarity_tonic": {
   "name": "Tônico da Clareza",
   "stack": 10,
   "corruption": -40,
   "potion": true,
-  "icon": "bottle_C_brown"
+  "icon": "bottle_C_brown",
+  "noise": 8
  },
  "rot": {
   "name": "Comida Podre",

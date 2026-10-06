@@ -134,3 +134,30 @@ static func leaves(parent: Node3D) -> CPUParticles3D:
 	g.set_color(1, Color(0.7, 0.25, 0.1))
 	p.color_initial_ramp = g
 	return p
+
+
+## Arcane-noise telegraph: a violet ring expanding along the ground from a
+## magic act, sized like how far the Errantes can now hear it. Frees itself.
+static func noise_ring(parent: Node3D, pos: Vector3, radius: float) -> void:
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.92
+	ring.outer_radius = 1.0
+	ring.rings = 48
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.albedo_color = Color(0.7, 0.4, 1.0, 0.7)
+	var mi := MeshInstance3D.new()
+	mi.mesh = ring
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.scale = Vector3(1.0, 0.05, 1.0)
+	parent.add_child(mi)
+	mi.position = pos + Vector3(0, 0.15, 0)
+	if not mi.is_inside_tree():
+		return
+	var tw := mi.create_tween().set_parallel(true)
+	tw.tween_property(mi, "scale", Vector3(radius, 0.05, radius), 1.1).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 1.1)
+	tw.chain().tween_callback(mi.queue_free)

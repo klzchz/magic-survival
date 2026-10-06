@@ -1,12 +1,15 @@
 extends Node3D
-# A creature of the Mist: a spectral skeleton that rises from the ground at
-# night, hunts the nearest living apprentice in the dark, burns in any light
-# (sun, wisp, campfire) and is pushed out of bone-ward circles. The Blood
-# Moon horror is the same creature with boss = true (a giant red warrior).
+# An Errante of the Mist: a spectral skeleton that rises at night and HUNTS
+# MAGIC. It notices an apprentice only up close, or from far away when that
+# apprentice is loud with arcane noise (spells, potions, magic crafting);
+# otherwise it wanders. It burns in any light (sun, wisp, campfire, torch)
+# and is pushed out of bone-ward circles. The Blood Moon horror is the same
+# creature with boss = true (a giant red warrior). Design: GDD "Errantes".
 
 const Art = preload("res://src/core/art.gd")
 const Models = preload("res://src/core/models.gd")
 const Rig = preload("res://src/core/rig.gd")
+const Data = preload("res://src/core/data.gd")
 
 var boss := false
 var hp := 40.0
@@ -14,6 +17,8 @@ var last_hitter = null     # apprentice whose spell hit it last (gets the drop)
 var model: Node3D
 var rig: Rig
 var _attack_cd := 0.0
+var _wander := Vector3.ZERO
+var _wander_t := 0.0
 var _burning := false
 var _spectral: StandardMaterial3D
 var _burn: StandardMaterial3D
@@ -80,8 +85,18 @@ func tick(delta: float, world, lit: float, _clock: float) -> void:
 		_set_burning(true)
 		return
 	_set_burning(false)
-	var target = world.nearest_player(position)
-	if target == null:
+	var target = world.nearest_player(position) if boss else world.errante_target(position)  # the Blood Moon horror always hunts
+	if target == null:  # nothing heard: drift through the dark
+		_wander_t -= delta
+		if _wander_t <= 0.0:
+			_wander_t = randf_range(2.0, 5.0)
+			var a := randf() * TAU
+			_wander = Vector3(cos(a), 0, sin(a))
+		var wp: Vector3 = world.apply_wards(position + _wander * float(Data.night("wander_speed", 1.2)) * delta)
+		wp.y = world.terrain.height_at(wp.x, wp.z) + hover_height()
+		if model != null:
+			model.rotation.y = atan2(_wander.x, _wander.z)
+		position = wp
 		return
 	var to_p: Vector3 = target.position - position
 	to_p.y = 0.0

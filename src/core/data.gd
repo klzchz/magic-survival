@@ -9,6 +9,7 @@ const PATHS := {
 	"recipes": "res://assets/data/recipes.json",
 	"characters": "res://assets/data/characters.json",
 	"resources": "res://assets/data/resources.json",
+	"night": "res://assets/data/night.json",
 }
 
 static var _cache := {}
@@ -36,6 +37,11 @@ static func item_name(id: String) -> String:
 
 static func character(id: String) -> Dictionary:
 	return table("characters").get(id, {})
+
+
+## Night / Errante tuning value (assets/data/night.json).
+static func night(key: String, default = 0.0):
+	return table("night").get(key, default)
 
 
 static func resource(kind: String) -> Dictionary:
