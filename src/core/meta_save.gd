@@ -9,6 +9,7 @@ var path: String
 var best_nights := 0
 var hearts := 0
 var spells: Array = []
+var discoveries: Array = []    # grimoire notes found (permanent)
 
 
 func _init(save_path: String = Cfg.SAVE_PATH) -> void:
@@ -28,12 +29,15 @@ func load_from_disk() -> void:
 		var sp = data.get("spells", [])
 		if sp is Array:
 			spells = sp
+		var ds = data.get("discoveries", [])
+		if ds is Array:
+			discoveries = ds
 
 
 func save() -> void:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f != null:
-		f.store_string(JSON.stringify({"best_nights": best_nights, "hearts": hearts, "spells": spells}))
+		f.store_string(JSON.stringify({"best_nights": best_nights, "hearts": hearts, "spells": spells, "discoveries": discoveries}))
 
 
 func knows(id: String) -> bool:

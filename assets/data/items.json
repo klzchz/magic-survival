@@ -4,35 +4,41 @@
   "stack": 40,
   "fuel": 15,
   "wisp": 10,
-  "icon": "grass"
+  "icon": "grass",
+  "desc": "Combustível leve e material de tochas, armaduras e da cabana. Alimenta o fogo-fátuo (+10)."
  },
  "twig": {
   "name": "Galho",
   "stack": 40,
   "fuel": 15,
   "wisp": 25,
-  "icon": "twig"
+  "icon": "twig",
+  "desc": "Base de ferramentas e varinhas. Alimenta o fogo-fátuo (+25) ou a fogueira."
  },
  "log": {
   "name": "Tora",
   "stack": 20,
   "fuel": 45,
-  "icon": "log_s"
+  "icon": "log_s",
+  "desc": "Madeira para fogueira, Altar, Caldeirão e cabana. Ótimo combustível (+45 s)."
  },
  "rock": {
   "name": "Pedra",
   "stack": 40,
-  "icon": "rock_c"
+  "icon": "rock_c",
+  "desc": "Pedra para Altar, Caldeirão, cabana e talismãs."
  },
  "flint": {
   "name": "Pederneira",
   "stack": 40,
-  "icon": "flint"
+  "icon": "flint",
+  "desc": "Pedra lascada: corta. Necessária para machado e picareta."
  },
  "bone": {
   "name": "Osso",
   "stack": 40,
-  "icon": "bone_a"
+  "icon": "bone_a",
+  "desc": "Resto de Errante. Material de magia (ward, cajado, talismã)."
  },
  "essence": {
   "name": "Essência da Névoa",
@@ -40,7 +46,8 @@
   "mana": 25,
   "wisp": 50,
   "icon": "essence",
-  "noise": 8
+  "noise": 8,
+  "desc": "Essência da Névoa: +25 mana, +50 fogo-fátuo. Ingrediente mágico. Usar faz ruído (8)."
  },
  "mushroom": {
   "name": "Cogumelo-fantasma",
@@ -49,7 +56,8 @@
   "corruption": 3,
   "spoil": 360,
   "cooked": "mushroom_cooked",
-  "icon": "mushroom"
+  "icon": "mushroom",
+  "desc": "+12 fome, +3 corrupção. Asse na fogueira para comer melhor."
  },
  "mushroom_cooked": {
   "name": "Cogumelo assado",
@@ -57,7 +65,8 @@
   "hunger": 25,
   "health": 3,
   "spoil": 270,
-  "icon": "mushroom_cooked"
+  "icon": "mushroom_cooked",
+  "desc": "+25 fome, +3 vida. Sem corrupção."
  },
  "berries": {
   "name": "Frutinhas",
@@ -65,7 +74,8 @@
   "hunger": 9,
   "spoil": 270,
   "cooked": "berries_cooked",
-  "icon": "berries"
+  "icon": "berries",
+  "desc": "+9 fome. Asse para +2 de vida."
  },
  "berries_cooked": {
   "name": "Frutinhas assadas",
@@ -73,7 +83,8 @@
   "hunger": 12,
   "health": 2,
   "spoil": 180,
-  "icon": "berries_cooked"
+  "icon": "berries_cooked",
+  "desc": "+12 fome, +2 vida."
  },
  "axe": {
   "name": "Machado",
@@ -81,7 +92,8 @@
   "equip": "hand",
   "tool": "axe",
   "uses": 60,
-  "icon": "axe_1handed"
+  "icon": "axe_1handed",
+  "desc": "Corta árvores (1 uso por golpe)."
  },
  "pickaxe": {
   "name": "Picareta",
@@ -89,7 +101,8 @@
   "equip": "hand",
   "tool": "pickaxe",
   "uses": 40,
-  "icon": "pickaxe"
+  "icon": "pickaxe",
+  "desc": "Quebra rochas: pedra e pederneira (1 uso por golpe)."
  },
  "torch": {
   "name": "Tocha",
@@ -97,7 +110,8 @@
   "equip": "hand",
   "light": 8.0,
   "burn": 90,
-  "icon": "torch"
+  "icon": "torch",
+  "desc": "Ilumina (raio 8) por 90 s. Afasta a Névoa, mas NÃO fere Errantes."
  },
  "bone_staff": {
   "name": "Cajado de Osso",
@@ -106,7 +120,8 @@
   "spell_damage": 1.8,
   "spell_cost": 0.6,
   "uses": 60,
-  "icon": "staff"
+  "icon": "staff",
+  "desc": "Cajado: feitiço x1,8 de dano, custo x0,6. Gasta 1 uso por feitiço."
  },
  "grass_armor": {
   "name": "Armadura de Grama",
@@ -114,7 +129,8 @@
   "equip": "body",
   "armor": 0.6,
   "uses": 150,
-  "icon": "grass_armor"
+  "icon": "grass_armor",
+  "desc": "Absorve 60% do dano até se desfazer."
  },
  "elixir": {
   "name": "Elixir de Cura",
@@ -122,7 +138,8 @@
   "health": 40,
   "potion": true,
   "icon": "bottle_A_green",
-  "noise": 10
+  "noise": 10,
+  "desc": "Poção de cura: +40 vida (Aldric +50%). Faz ruído (10)."
  },
  "mana_potion": {
   "name": "Poção de Mana",
@@ -130,7 +147,8 @@
   "mana": 60,
   "potion": true,
   "icon": "bottle_B_green",
-  "noise": 12
+  "noise": 12,
+  "desc": "+60 mana. Faz ruído (12)."
  },
  "clarity_tonic": {
   "name": "Tônico da Clareza",
@@ -138,13 +156,87 @@
   "corruption": -40,
   "potion": true,
   "icon": "bottle_C_brown",
-  "noise": 8
+  "noise": 8,
+  "desc": "-40 corrupção. Faz ruído (8)."
  },
  "rot": {
   "name": "Comida Podre",
   "stack": 40,
   "hunger": 2,
   "corruption": 10,
-  "icon": "rot"
+  "icon": "rot",
+  "desc": "Comida estragada: +2 fome, +10 corrupção."
+ },
+ "wand": {
+  "name": "Varinha de Aprendiz",
+  "stack": 1,
+  "equip": "hand",
+  "spell_damage": 1.0,
+  "spell_cost": 1.0,
+  "noise_mult": 1.0,
+  "icon": "wand",
+  "desc": "Varinha simples de galho. Disparo: 60 dano, 20 mana, ruído 18. Encaixe um núcleo no Altar."
+ },
+ "core_naga": {
+  "name": "Núcleo de Escama de Naga",
+  "stack": 5,
+  "icon": "core_naga",
+  "desc": "Núcleo de potência: transforma a varinha em Varinha de Naga (+70% dano, mais ruído)."
+ },
+ "core_hongsa": {
+  "name": "Núcleo de Pena de Hongsa",
+  "stack": 5,
+  "icon": "core_hongsa",
+  "desc": "Núcleo silencioso: transforma a varinha em Varinha de Hongsa (-55% ruído, -10% mana)."
+ },
+ "wand_naga": {
+  "name": "Varinha de Naga",
+  "stack": 1,
+  "equip": "hand",
+  "spell_damage": 1.7,
+  "spell_cost": 1.1,
+  "noise_mult": 1.4,
+  "uses": 80,
+  "icon": "wand_naga",
+  "desc": "Potência: dano x1,7 (102), mana x1,1 (22), ruído x1,4 (25). 80 feitiços."
+ },
+ "wand_hongsa": {
+  "name": "Varinha de Hongsa",
+  "stack": 1,
+  "equip": "hand",
+  "spell_damage": 1.0,
+  "spell_cost": 0.9,
+  "noise_mult": 0.45,
+  "uses": 80,
+  "icon": "wand_hongsa",
+  "desc": "Silêncio: dano x1 (60), mana x0,9 (18), ruído x0,45 (8). 80 feitiços."
+ },
+ "talisman_guard": {
+  "name": "Talismã do Guardião",
+  "stack": 5,
+  "buff": "guard",
+  "duration": 45,
+  "noise": 6,
+  "icon": "talisman_guard",
+  "desc": "Consumível: -50% de dano recebido por 45 s. Ruído 6."
+ },
+ "talisman_hush": {
+  "name": "Talismã do Silêncio",
+  "stack": 5,
+  "buff": "hush",
+  "duration": 45,
+  "noise": 0,
+  "icon": "talisman_hush",
+  "desc": "Consumível: zera o ruído e reduz o ruído gerado em 70% por 45 s."
+ },
+ "lantern": {
+  "name": "Lanterna Encantada",
+  "stack": 1,
+  "equip": "hand",
+  "light": 11.0,
+  "burn": 150,
+  "noise_per_sec": 2.5,
+  "icon": "lantern",
+  "desc": "Luz forte (raio 11) por 150 s. Não fere Errantes e gera ruído (2,5/s) enquanto acesa na mão."
  }
 }

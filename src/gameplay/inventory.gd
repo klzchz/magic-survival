@@ -70,11 +70,15 @@ func put_stack(stack: Dictionary) -> bool:
 	return false
 
 
+## Counts the bag AND what is equipped (so a held wand can take a core).
 func count(id: String) -> int:
 	var n := 0
 	for s in slots:
 		if s != null and s.id == id:
 			n += s.count
+	for where in equip:
+		if equip[where] != null and equip[where].id == id:
+			n += equip[where].count
 	return n
 
 
@@ -98,6 +102,12 @@ func remove(id: String, n: int) -> bool:
 			n -= take
 			if s.count <= 0:
 				slots[i] = null
+	for where in equip:  # fall back to equipped gear (e.g. the wand in hand)
+		if n <= 0:
+			break
+		if equip[where] != null and equip[where].id == id:
+			equip[where] = null
+			n -= 1
 	return true
 
 

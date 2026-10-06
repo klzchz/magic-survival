@@ -83,6 +83,8 @@ func tick(delta: float, world, lit: float, _clock: float) -> void:
 	if world.burns_errante(position, lit, boss):
 		hp -= 22.0 * delta
 		_set_burning(true)
+		if lit <= 0.5:
+			world.discover("burns")
 		return
 	_set_burning(false)
 	var target = world.nearest_player(position) if boss else world.errante_target(position)  # the Blood Moon horror always hunts
@@ -103,8 +105,9 @@ func tick(delta: float, world, lit: float, _clock: float) -> void:
 	var d := to_p.length()
 	var speed := 2.6 if boss else 3.6
 	var p := position
-	if d > 0.001:
-		p += to_p.normalized() * speed * delta
+	var reach_stop := (2.4 if boss else 1.4) * 0.75
+	if d > reach_stop:  # stop at striking distance instead of walking into the apprentice
+		p += to_p.normalized() * minf(speed * delta, d - reach_stop)
 		if model != null:
 			model.rotation.y = atan2(to_p.x, to_p.z)
 	p = world.apply_wards(p)

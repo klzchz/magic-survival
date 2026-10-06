@@ -360,12 +360,25 @@ func _max_noise() -> float:
 	return m
 
 
+## Records a grimoire discovery (permanent) and tells the player once.
+func discover(id: String) -> void:
+	if id in meta.discoveries:
+		return
+	meta.discoveries.append(id)
+	meta.save()
+	var text: String = Data.table("discoveries").get(id, "")
+	if text != "":
+		hud.flash("Nova descoberta no grimório (G): " + text, 6.0)
+
+
 ## Magic acts are loud: raise the apprentice's noise and show the ring.
 func emit_noise(p, amount: float) -> void:
 	if amount <= 0.0:
 		return
 	p.make_noise(amount)
 	Fx.noise_ring(self, p.position, p.heard_from())
+	if p.noise > 30.0:
+		discover("noise")
 
 
 func nearest_player(pos: Vector3):
@@ -654,6 +667,7 @@ func tick(delta: float) -> void:
 			if note != "":
 				_say(p, note)
 			if p.tick_darkness(is_lit(p.position, lit), night, delta) and p.dark_t < Cfg.DARK_WARN_AT:
+				discover("darkness")
 				_say(p, "A Névoa te arranha no escuro! Acenda uma luz!")
 		p.update_wisp_light(lit)
 	day_night.apply_visuals(lit)
@@ -736,9 +750,11 @@ func _check_deaths() -> void:
 
 func _on_night_start(blood_moon: bool) -> void:
 	if blood_moon:
+		discover("blood_moon")
 		_announce("LUA DE SANGUE! Algo grande caça vocês esta noite.")
 		spawn_shadow(true)
 	elif day_night.nights == 0:
+		discover("first_night")
 		hud.flash("Primeira noite: os ERRANTES despertam e caçam MAGIA. Quieto, eles só te notam de perto. Cada feitiço ou poção faz RUÍDO e os atrai de longe. A luz os queima, mas sem luz nenhuma a Névoa fere.", 10.0)
 	else:
 		_announce("A Névoa desce. Errantes vagam: cuidado com o ruído da magia.")
@@ -759,6 +775,7 @@ func _on_shadow_death(s) -> void:
 		run_hearts += 1
 		for id in BOSS_DROPS:
 			spawn_item(id, BOSS_DROPS[id], at + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5)))
+		discover("heart")
 		_announce("O CORAÇÃO DA NÉVOA CAIU! (corações: %d/%d p/ o Portal) Recolha o butim." % [run_hearts, Cfg.PORTAL_HEARTS])
 	elif who != null:
 		for id in DROP_TABLE:
@@ -842,7 +859,7 @@ func craft_blocker(p, rid: String) -> String:
 	var r := Data.recipe(rid)
 	if r.is_empty():
 		return "Receita desconhecida"
-	var tech := Data.tab_tech(r.tab)
+	var tech := Data.recipe_tech(r)
 	if tech != "" and near_structure(p, tech) == null:
 		return "Precisa estar perto de: %s" % Data.display_name(tech)
 	if not p.inventory.has_all(r.cost):
@@ -1080,6 +1097,7 @@ func _interact(p) -> void:
 	if kind == "page":
 		_despawn(best)
 		_learn_next_spell(p)
+		discover("page")
 		return
 	if kind == "item" and not best.item_stack.is_empty():
 		if not p.inventory.put_stack(best.item_stack):  # keeps durability / freshness
@@ -1119,6 +1137,7 @@ func _learn_next_spell(p) -> void:
 
 
 func _try_portal(p) -> void:
+	discover("portal")
 	if run_hearts < Cfg.PORTAL_HEARTS:
 		_say(p, "O Portal dorme. Precisa de %d Corações da Névoa (tem %d): vença o horror da Lua de Sangue" % [Cfg.PORTAL_HEARTS, run_hearts])
 		return
@@ -1138,7 +1157,7 @@ func _cast_bolt(p) -> void:
 		return
 	p.mana -= cost
 	p.corrupt(5.0)
-	emit_noise(p, float(Data.night("noise", {}).get("bolt", 18)))
+	emit_noise(p, float(Data.spell("bolt").get("noise", 18)) * p.wand_noise_mult())
 	var best = null
 	var bd := 16.0
 	for s in shadows():
@@ -1146,11 +1165,12 @@ func _cast_bolt(p) -> void:
 		if d < bd:
 			bd = d
 			best = s
-	if p.inventory.hand_id() == "bone_staff":
+	var hand_d: Dictionary = p.inventory.hand_data()
+	if hand_d.has("spell_damage") and hand_d.has("uses"):
 		var broke: String = p.inventory.wear("hand", 1.0)
 		if broke != "":
 			p.refresh_gear()
-			_say(p, "O Cajado de Osso se partiu!")
+			_say(p, "%s se partiu!" % Data.item_name(broke))
 	if best == null:
 		p.play_action("bolt")
 		_say(p, "Feitiço lançado no vazio")
@@ -1166,16 +1186,17 @@ func _cast_lume(p) -> void:
 	if not meta.knows("lume"):
 		_say(p, "Vocês ainda não conhecem LUME (ache páginas nas Ruínas)")
 		return
-	if p.mana < 15.0:
-		_say(p, "Mana insuficiente")
+	var lume := Data.spell("lume")
+	if p.mana < float(lume.mana):
+		_say(p, "Mana insuficiente (Lume custa %d)" % int(lume.mana))
 		return
-	p.mana -= 15.0
+	p.mana -= float(lume.mana)
 	p.corrupt(3.0)
-	emit_noise(p, float(Data.night("noise", {}).get("lume", 30)))
+	emit_noise(p, float(Data.spell("lume").get("noise", 30)) * p.wand_noise_mult())
 	var burned := 0
 	for s in shadows():
-		if s.position.distance_to(p.position) < 10.0:
-			s.hp -= 50.0 * p.perk("bolt_mult")
+		if s.position.distance_to(p.position) < float(lume.radius):
+			s.hp -= float(lume.damage) * p.perk("bolt_mult")
 			s.last_hitter = p
 			burned += 1
 	p.wisp = minf(100.0, p.wisp + 10.0)
@@ -1187,12 +1208,13 @@ func _cast_shield(p) -> void:
 	if not meta.knows("escudo"):
 		_say(p, "Vocês ainda não conhecem ESCUDO (ache páginas nas Ruínas)")
 		return
-	if p.mana < 25.0:
-		_say(p, "Mana insuficiente")
+	var esc := Data.spell("escudo")
+	if p.mana < float(esc.mana):
+		_say(p, "Mana insuficiente (Escudo custa %d)" % int(esc.mana))
 		return
-	p.mana -= 25.0
-	p.shield_t = 6.0
-	emit_noise(p, float(Data.night("noise", {}).get("shield", 14)))
+	p.mana -= float(esc.mana)
+	p.shield_t = float(esc.duration)
+	emit_noise(p, float(Data.spell("escudo").get("noise", 14)) * p.wand_noise_mult())
 	p.play_action("shield")
 	_say(p, "ESCUDO! Nada te toca por 6 segundos")
 

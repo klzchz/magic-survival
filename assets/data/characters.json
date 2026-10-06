@@ -19,6 +19,7 @@
   "bolt_mult": 1.0,
   "strike_power": 1,
   "start": {
+   "wand": 1,
    "mushroom": 2,
    "elixir": 1
   },
@@ -53,6 +54,7 @@
   "bolt_mult": 1.5,
   "strike_power": 1,
   "start": {
+   "wand": 1,
    "torch": 1,
    "grass": 2
   },
@@ -90,6 +92,7 @@
   "bolt_mult": 1.0,
   "strike_power": 2,
   "start": {
+   "wand": 1,
    "axe": 1
   },
   "perks": [

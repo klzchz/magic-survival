@@ -1,18 +1,200 @@
 {
-  "tabs": ["Ferramentas", "Luz", "Sobrevivência", "Estruturas", "Magia", "Alquimia"],
-  "tech": {"Magia": "altar", "Alquimia": "cauldron"},
-  "recipes": [
-    {"id": "axe", "tab": "Ferramentas", "cost": {"twig": 1, "flint": 1}},
-    {"id": "pickaxe", "tab": "Ferramentas", "cost": {"twig": 2, "flint": 2}},
-    {"id": "torch", "tab": "Luz", "cost": {"grass": 2, "twig": 2}},
-    {"id": "campfire", "tab": "Luz", "cost": {"grass": 3, "log": 2}, "structure": true, "name": "Fogueira"},
-    {"id": "grass_armor", "tab": "Sobrevivência", "cost": {"grass": 10, "twig": 2}},
-    {"id": "altar", "tab": "Estruturas", "cost": {"rock": 4, "log": 3, "flint": 2}, "structure": true, "name": "Altar Arcano"},
-    {"id": "cauldron", "tab": "Estruturas", "cost": {"rock": 3, "log": 2}, "structure": true, "name": "Caldeirão"},
-    {"id": "ward", "tab": "Magia", "cost": {"bone": 2, "twig": 1}, "structure": true, "name": "Ward de Ossos"},
-    {"id": "bone_staff", "tab": "Magia", "cost": {"bone": 3, "log": 2, "essence": 1}},
-    {"id": "elixir", "tab": "Alquimia", "cost": {"mushroom": 2, "berries": 1}},
-    {"id": "mana_potion", "tab": "Alquimia", "cost": {"mushroom": 1, "essence": 1}},
-    {"id": "clarity_tonic", "tab": "Alquimia", "cost": {"berries": 2, "essence": 1}}
-  ]
+ "tabs": [
+  "Ferramentas",
+  "Luz",
+  "Sobrevivência",
+  "Estruturas",
+  "Magia",
+  "Alquimia"
+ ],
+ "tech": {
+  "Magia": "altar",
+  "Alquimia": "cauldron"
+ },
+ "recipes": [
+  {
+   "id": "axe",
+   "tab": "Ferramentas",
+   "cost": {
+    "twig": 1,
+    "flint": 1
+   }
+  },
+  {
+   "id": "pickaxe",
+   "tab": "Ferramentas",
+   "cost": {
+    "twig": 2,
+    "flint": 2
+   }
+  },
+  {
+   "id": "torch",
+   "tab": "Luz",
+   "cost": {
+    "grass": 2,
+    "twig": 2
+   }
+  },
+  {
+   "id": "campfire",
+   "tab": "Luz",
+   "cost": {
+    "grass": 3,
+    "log": 2
+   },
+   "structure": true,
+   "name": "Fogueira",
+   "desc": "Queima Errantes no raio da luz (exceto o horror da Lua de Sangue). Consome combustível; reacende com lenha."
+  },
+  {
+   "id": "grass_armor",
+   "tab": "Sobrevivência",
+   "cost": {
+    "grass": 10,
+    "twig": 2
+   }
+  },
+  {
+   "id": "altar",
+   "tab": "Estruturas",
+   "cost": {
+    "rock": 4,
+    "log": 3,
+    "flint": 2
+   },
+   "structure": true,
+   "name": "Altar Arcano",
+   "desc": "Estação mágica: libera a aba Magia por perto. Construir faz ruído."
+  },
+  {
+   "id": "cauldron",
+   "tab": "Estruturas",
+   "cost": {
+    "rock": 3,
+    "log": 2
+   },
+   "structure": true,
+   "name": "Caldeirão",
+   "desc": "Estação de alquimia: libera a aba Alquimia por perto."
+  },
+  {
+   "id": "ward",
+   "tab": "Magia",
+   "cost": {
+    "bone": 2,
+    "twig": 1
+   },
+   "structure": true,
+   "name": "Ward de Ossos",
+   "desc": "Empurra Errantes para fora de um círculo de 6 m. Construir faz ruído."
+  },
+  {
+   "id": "bone_staff",
+   "tab": "Magia",
+   "cost": {
+    "bone": 3,
+    "log": 2,
+    "essence": 1
+   }
+  },
+  {
+   "id": "elixir",
+   "tab": "Alquimia",
+   "cost": {
+    "mushroom": 2,
+    "berries": 1
+   }
+  },
+  {
+   "id": "mana_potion",
+   "tab": "Alquimia",
+   "cost": {
+    "mushroom": 1,
+    "essence": 1
+   }
+  },
+  {
+   "id": "clarity_tonic",
+   "tab": "Alquimia",
+   "cost": {
+    "berries": 2,
+    "essence": 1
+   }
+  },
+  {
+   "id": "cabin",
+   "tab": "Estruturas",
+   "cost": {
+    "log": 8,
+    "grass": 10,
+    "rock": 4
+   },
+   "structure": true,
+   "name": "Cabana de Palafita",
+   "desc": "Base: descanse (R) para recuperar vida. O tempo passa rápido e a fome dobra. Não protege de Errantes."
+  },
+  {
+   "id": "core_naga",
+   "tab": "Magia",
+   "cost": {
+    "bone": 2,
+    "essence": 1,
+    "flint": 1
+   }
+  },
+  {
+   "id": "core_hongsa",
+   "tab": "Magia",
+   "cost": {
+    "mushroom": 1,
+    "essence": 1,
+    "twig": 1
+   }
+  },
+  {
+   "id": "wand_naga",
+   "tab": "Magia",
+   "cost": {
+    "wand": 1,
+    "core_naga": 1
+   }
+  },
+  {
+   "id": "wand_hongsa",
+   "tab": "Magia",
+   "cost": {
+    "wand": 1,
+    "core_hongsa": 1
+   }
+  },
+  {
+   "id": "talisman_guard",
+   "tab": "Magia",
+   "cost": {
+    "bone": 2,
+    "rock": 1,
+    "essence": 1
+   }
+  },
+  {
+   "id": "talisman_hush",
+   "tab": "Magia",
+   "cost": {
+    "grass": 3,
+    "berries": 1,
+    "essence": 1
+   }
+  },
+  {
+   "id": "lantern",
+   "tab": "Luz",
+   "cost": {
+    "essence": 1,
+    "rock": 1,
+    "grass": 2
+   },
+   "tech_override": "altar"
+  }
+ ]
 }

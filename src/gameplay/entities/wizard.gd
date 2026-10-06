@@ -36,6 +36,9 @@ var inventory: Inventory
 var shield_t := 0.0        # seconds of Escudo remaining
 var dark_t := 0.0          # seconds spent in total darkness at night
 var noise := 0.0           # arcane noise 0..100: magic use draws the Errantes
+var guard_t := 0.0         # Talismã do Guardião: -50% damage while > 0
+var hush_t := 0.0          # Talismã do Silêncio: -70% noise while > 0
+var resting := false       # resting in the cabin (time flies, heals, hungrier)
 var dead := false
 var wisp_light: OmniLight3D
 var terrain = null         # set by the world: ground height + lakes
@@ -114,6 +117,9 @@ func respawn(at: Vector3, eco: bool) -> void:
 	shield_t = 0.0
 	dark_t = 0.0
 	noise = 0.0
+	guard_t = 0.0
+	hush_t = 0.0
+	resting = false
 	dead = false
 	visible = true
 	if rig != null:
@@ -151,12 +157,17 @@ func tick_stats(delta: float) -> String:
 	corruption = maxf(0.0, corruption - 0.4 * delta)
 	shield_t = maxf(0.0, shield_t - delta)
 	noise = maxf(0.0, noise - float(Data.night("noise_decay", 6.0)) * delta)
+	guard_t = maxf(0.0, guard_t - delta)
+	hush_t = maxf(0.0, hush_t - delta)
 	if inventory.tick_spoil(delta) > 0:
 		note = "Alguma comida apodreceu"
-	if inventory.hand_id() == "torch":
+	var hd := inventory.hand_data()
+	if hd.has("burn"):  # torch / lantern burn down while held
+		if hd.has("noise_per_sec"):
+			make_noise(float(hd.noise_per_sec) * delta)
 		var broke := inventory.wear("hand", delta)
 		if broke != "":
-			note = "A tocha se apagou"
+			note = "%s se apagou" % Data.item_name(broke)
 			refresh_gear()
 	return note
 
@@ -183,8 +194,8 @@ func light_radius() -> float:
 	var r := 0.0
 	if wisp > 0.0:
 		r = 4.0 + wisp * 0.10
-	if inventory != null and inventory.hand_id() == "torch":
-		r = maxf(r, float(inventory.hand_data().get("light", 8.0)))
+	if inventory != null and inventory.hand_data().has("light"):
+		r = maxf(r, float(inventory.hand_data().light))
 	return r
 
 
@@ -197,7 +208,8 @@ func refresh_gear() -> void:
 		Models.set_parts_visible(model, ["1H_Wand"], hand != "bone_staff")
 		Models.set_parts_visible(model, ["2H_Staff"], hand == "bone_staff")
 	if torch_light != null:
-		torch_light.visible = hand == "torch"
+		torch_light.visible = inventory != null and inventory.hand_data().has("light")
+		torch_light.light_color = Color(0.7, 0.55, 1.0) if hand == "lantern" else Color(1.0, 0.65, 0.3)
 
 
 func move(dir: Vector3, delta: float) -> void:
@@ -238,7 +250,8 @@ func hit(amount: float) -> void:
 func hurt(dps: float, delta: float) -> void:
 	if shield_t > 0.0 or dead:
 		return
-	var dmg := dps * delta * perk("damage_taken")
+	resting = false  # any blow wakes you up
+	var dmg := dps * delta * perk("damage_taken") * (0.5 if guard_t > 0.0 else 1.0)
 	var body = inventory.equip.body
 	if body != null:
 		var absorbed := dmg * float(Data.item(body.id).get("armor", 0.0))
@@ -253,7 +266,14 @@ func hurt(dps: float, delta: float) -> void:
 
 ## Magic is loud: raises the arcane noise the Errantes hear (see night.json).
 func make_noise(amount: float) -> void:
+	if hush_t > 0.0:
+		amount *= 0.3
 	noise = clampf(noise + amount, 0.0, 100.0)
+
+
+## Noise multiplier of the held wand (Hongsa core is quiet, Naga is loud).
+func wand_noise_mult() -> float:
+	return float(inventory.hand_data().get("noise_mult", 1.0))
 
 
 ## How far away an Errante hears this apprentice right now.
@@ -288,6 +308,17 @@ func use_slot(i: int) -> String:
 		refresh_gear()
 		play_action("build")
 		return "Equipou: %s" % d.name
+	if d.has("buff"):
+		inventory.take_from(i)
+		var dur := float(d.get("duration", 45.0))
+		if d.buff == "guard":
+			guard_t = dur
+		elif d.buff == "hush":
+			hush_t = dur
+			noise = 0.0
+		make_noise(float(d.get("noise", 0.0)))
+		play_action("use")
+		return "%s ativo por %d s" % [d.name, int(dur)]
 	if d.has("hunger") or d.has("potion") or d.has("mana") and not d.has("wisp"):
 		return _consume(i, d)
 	if s.id == "essence":

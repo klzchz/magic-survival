@@ -1,0 +1,12 @@
+{
+  "first_night": "Os Errantes despertam à noite e caçam MAGIA. Quietos, eles só nos notam de perto.",
+  "noise": "Todo feitiço, poção, talismã e lanterna faz ruído arcano. Ruído alto atrai Errantes de longe.",
+  "burns": "Só o sol e o fogo de uma fogueira queimam Errantes. Fogo-fátuo, tocha e lanterna só afastam a Névoa.",
+  "darkness": "Na escuridão total a Névoa fere. Qualquer luz (fogo-fátuo, tocha, lanterna, cabana) protege disso.",
+  "page": "Páginas do grimório nas ruínas do templo ensinam feitiços. O saber permanece entre vidas.",
+  "core": "Um núcleo encaixado no Altar muda a varinha: Naga dá potência, Hongsa dá silêncio.",
+  "rest": "Descansar na cabana cura, mas o tempo voa e a fome aperta. Errantes ainda podem acordar você.",
+  "blood_moon": "A cada 3ª noite, a Lua de Sangue traz um horror gigante que resiste ao fogo.",
+  "heart": "O Coração da Névoa, arrancado do horror, desperta o Portal do templo.",
+  "portal": "O Portal do templo leva de volta ao Colégio quando recebe os Corações da Névoa."
+}

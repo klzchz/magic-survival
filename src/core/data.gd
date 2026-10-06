@@ -10,6 +10,8 @@ const PATHS := {
 	"characters": "res://assets/data/characters.json",
 	"resources": "res://assets/data/resources.json",
 	"night": "res://assets/data/night.json",
+	"spells": "res://assets/data/spells.json",
+	"discoveries": "res://assets/data/discoveries.json",
 }
 
 static var _cache := {}
@@ -37,6 +39,10 @@ static func item_name(id: String) -> String:
 
 static func character(id: String) -> Dictionary:
 	return table("characters").get(id, {})
+
+
+static func spell(id: String) -> Dictionary:
+	return table("spells").get(id, {})
 
 
 ## Night / Errante tuning value (assets/data/night.json).
@@ -68,9 +74,26 @@ static func tab_tech(tab: String) -> String:
 	return table("recipes").get("tech", {}).get(tab, "")
 
 
+## Station a recipe needs nearby (its own override, else its tab's).
+static func recipe_tech(r: Dictionary) -> String:
+	return r.get("tech_override", tab_tech(r.get("tab", "")))
+
+
 ## Display name of an item or a structure recipe.
 static func display_name(id: String) -> String:
 	var r := recipe(id)
 	if r.has("name"):
 		return r.name
+	if id == "altar":
+		return "Altar Arcano"
+	if id == "cauldron":
+		return "Caldeirão"
 	return item_name(id)
+
+
+## What an item / structure does (from its data), for tooltips and the grimoire.
+static func describe(id: String) -> String:
+	var r := recipe(id)
+	if r.get("structure", false):
+		return r.get("desc", "")
+	return item(id).get("desc", "")
