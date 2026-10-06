@@ -83,7 +83,7 @@ func _ready() -> void:
 	lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
 	lbl_msg.visible = false
 
-	var hint := _label(root, "WASD mover · Q/PgUp câmera · E/Espaço agir · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação", Vector2(140, 624), 12)
+	var hint := _label(root, "WASD mover · Q/PgUp câmera · E/Espaço agir · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · F11 tela cheia", Vector2(140, 624), 12)
 	hint.size = Vector2(1000, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color(0.85, 0.82, 0.75, 0.75))

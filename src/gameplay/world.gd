@@ -566,6 +566,12 @@ func _announce(text: String) -> void:
 
 # ---------- actions ----------
 
+## F11 / Alt+Enter: fullscreen <-> window (the HUD scales with the window).
+func toggle_fullscreen() -> void:
+	var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+
 ## Single entry point for every apprentice action (network-ready).
 ## Actions: interact · bolt · lume · shield · use:<slot> · alt:<slot> ·
 ## craft:<recipe id> · unequip:hand
@@ -800,9 +806,12 @@ func _cast_shield(p) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key != null and key.pressed and not key.echo and (key.keycode == KEY_F11 or (key.keycode == KEY_ENTER and key.alt_pressed)):
+		toggle_fullscreen()
+		return
 	if not started:
 		return
-	var key := event as InputEventKey
 	if key != null and key.pressed and not key.echo:
 		if key.keycode == KEY_R and (won or game_over):
 			restart()
