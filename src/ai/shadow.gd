@@ -2,8 +2,8 @@ extends Node3D
 # An Errante of the Mist: a spectral skeleton that rises at night and HUNTS
 # MAGIC. It notices an apprentice only up close, or from far away when that
 # apprentice is loud with arcane noise (spells, potions, magic crafting);
-# otherwise it wanders. It burns in any light (sun, wisp, campfire, torch)
-# and is pushed out of bone-ward circles. The Blood Moon horror is the same
+# otherwise it wanders. Sunlight and burning campfires sear it (wisp, torch
+# and lantern light don't); bone wards push it out of their circle. The Blood Moon horror is the same
 # creature with boss = true (a giant red warrior). Design: GDD "Errantes".
 
 const Art = preload("res://src/core/art.gd")
@@ -80,7 +80,7 @@ func _set_burning(on: bool) -> void:
 
 func tick(delta: float, world, lit: float, _clock: float) -> void:
 	_attack_cd = maxf(0.0, _attack_cd - delta)
-	if world.is_lit(position, lit):
+	if world.burns_errante(position, lit, boss):
 		hp -= 22.0 * delta
 		_set_burning(true)
 		return
@@ -111,8 +111,9 @@ func tick(delta: float, world, lit: float, _clock: float) -> void:
 	p.y = world.terrain.height_at(p.x, p.z) + hover_height()
 	position = p
 	var reach := 2.4 if boss else 1.4
-	if d < reach:
-		target.hurt(25.0 if boss else 14.0, delta)
-		if _attack_cd <= 0.0 and rig != null:
-			_attack_cd = 1.0
+	if d < reach and _attack_cd <= 0.0:
+		# discrete, telegraphed blows (no stacking damage-per-frame)
+		_attack_cd = float(Data.night("hit_interval", 1.3)) * randf_range(0.9, 1.15)
+		target.hit(float(Data.night("boss_hit_damage" if boss else "hit_damage", 8)))
+		if rig != null:
 			rig.action("1H_Melee_Attack_Chop")

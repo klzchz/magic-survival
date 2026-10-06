@@ -13,6 +13,7 @@ const Fx = preload("res://src/core/fx.gd")
 const Data = preload("res://src/core/data.gd")
 const Dev = preload("res://src/core/dev.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
+const SOLID := {"tree": 0.8, "rock": 0.85, "berry_bush": 0.6}   # collision radius per resource kind
 const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
 const MetaSave = preload("res://src/core/meta_save.gd")
 const Terrain = preload("res://src/gameplay/systems/terrain.gd")
@@ -379,6 +380,21 @@ func nearest_player(pos: Vector3):
 	return best
 
 
+## Lights that HURT Errantes: sunlight and a burning campfire (the Blood
+## Moon horror resists fire). Wisp, torch and lantern only light the way:
+## they keep the Mist's darkness off you but don't burn anything.
+func burns_errante(pos: Vector3, lit: float, is_boss := false) -> bool:
+	if lit > 0.5:
+		return true
+	if is_boss:
+		return false
+	for fire in structures_of("campfire"):
+		if fire.burning() and pos.distance_to(fire.position) < fire.radius():
+			return true
+	return false
+
+
+## Any light at all (protects apprentices from the darkness damage).
 func is_lit(pos: Vector3, lit: float) -> bool:
 	if lit > 0.5:
 		return true
@@ -438,6 +454,7 @@ func add_player(peer_id: int, character := DEFAULT_CHARACTER):
 	w.name = "Wizard%d" % peer_id
 	w.setup(character)
 	w.terrain = terrain
+	w.collider = resolve_collision
 	players_root.add_child(w)
 	w.respawn(_spawn_spot(w.slot), meta.knows("eco"))
 	return w
@@ -771,13 +788,17 @@ func _stage_scene(scene: String) -> void:
 		return
 	match scene:
 		"night":
-			for i in range(5):
+			for i in range(4):
 				var s = spawn_shadow()
-				var a := TAU * i / 5.0
-				s.position = terrain.on_ground(p.position + Vector3(cos(a), 0, sin(a)) * randf_range(6.0, 11.0)) + Vector3(0, s.hover_height(), 0)
-			p.noise = 60.0
+				var a := TAU * i / 4.0 + 0.4
+				s.position = terrain.on_ground(p.position + Vector3(cos(a), 0, sin(a)) * randf_range(9.0, 13.0)) + Vector3(0, s.hover_height(), 0)
+			p.noise = 40.0
 		"camp":
 			give(p, {"grass": 6, "log": 4, "rock": 6, "flint": 4, "twig": 6})
+			craft(p, "campfire")
+		"place":
+			give(p, {"grass": 3, "log": 2})
+			hud.toggle_crafting()
 			craft(p, "campfire")
 
 
@@ -853,6 +874,36 @@ func craft(p, rid: String) -> bool:
 	return true
 
 
+# ---------- collision (apprentices only; Errantes are spectral) ----------
+
+## Pushes a walker at pos out of trees, rocks, bushes, structures, ruins and
+## the Portal, so apprentices slide around obstacles instead of through them.
+func resolve_collision(pos: Vector3, radius := 0.45) -> Vector3:
+	var p2 := Vector2(pos.x, pos.z)
+	for g in resources():
+		if g.grown and SOLID.has(g.kind):
+			p2 = _push_out(p2, Vector2(g.position.x, g.position.z), float(SOLID[g.kind]) + radius)
+	for st in _children(structures_root):
+		p2 = _push_out(p2, Vector2(st.position.x, st.position.z), _footprint(st.kind) * 0.7 + radius)
+	for ruin in pillars():
+		p2 = _push_out(p2, Vector2(ruin.position.x, ruin.position.z), 0.9 + radius)
+	if portal != null:
+		for side in [-2.0, 2.0]:  # the two arch posts; walk through the middle
+			p2 = _push_out(p2, Vector2(portal.position.x + side, portal.position.z), 0.6 + radius)
+	return Vector3(p2.x, pos.y, p2.y)
+
+
+func _push_out(p: Vector2, center: Vector2, min_dist: float) -> Vector2:
+	var d := p - center
+	var len := d.length()
+	if len >= min_dist:
+		return p
+	if len < 0.001:
+		d = Vector2(1, 0)
+		len = 1.0
+	return center + d / len * min_dist
+
+
 # ---------- structure placement (preview, validation) ----------
 
 func _footprint(kind: String) -> float:
@@ -901,6 +952,14 @@ func _begin_placement(rid: String) -> void:
 	_ghost = Node3D.new()
 	add_child(_ghost)
 	ItemArt.build(_ghost, rid)
+	var disc := CylinderMesh.new()  # footprint on the ground: green ok / red blocked
+	disc.top_radius = _footprint(rid)
+	disc.bottom_radius = _footprint(rid)
+	disc.height = 0.05
+	var dmi := MeshInstance3D.new()
+	dmi.mesh = disc
+	dmi.position.y = 0.06
+	_ghost.add_child(dmi)
 	_update_placement()
 	_announce("Posicione: %s  ·  E ou clique confirma  ·  Esc ou botão direito cancela" % Data.display_name(rid))
 

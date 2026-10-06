@@ -1,12 +1,21 @@
 {
-  "base_rate": 0.12,
-  "noise_rate": 0.03,
-  "corruption_rate": 0.01,
-  "cap_base": 5,
-  "cap_per_noise": 0.3,
-  "noise_decay": 6.0,
-  "sense_radius": 10.0,
-  "hear_radius": 40.0,
-  "wander_speed": 1.2,
-  "noise": {"bolt": 18, "lume": 30, "shield": 14, "magic_craft": 12, "magic_build": 20}
+ "base_rate": 0.12,
+ "noise_rate": 0.03,
+ "corruption_rate": 0.01,
+ "cap_base": 5,
+ "cap_per_noise": 0.3,
+ "noise_decay": 6.0,
+ "sense_radius": 10.0,
+ "hear_radius": 40.0,
+ "wander_speed": 1.2,
+ "noise": {
+  "bolt": 18,
+  "lume": 30,
+  "shield": 14,
+  "magic_craft": 12,
+  "magic_build": 20
+ },
+ "hit_damage": 8,
+ "boss_hit_damage": 20,
+ "hit_interval": 1.3
 }

@@ -124,6 +124,14 @@ func _initialize() -> void:
 	for _i in range(80):  # walk straight at the lake
 		walker.move(Vector3(-1, 0, 0), 0.05)
 	_check(ter.is_walkable(walker.position.x, walker.position.z), "walking into a lake stops at the shore")
+	# collision: walk straight into a tree and slide around it instead of through it
+	var blocker = w.resources_of("tree")[0]
+	walker.position = ter.on_ground(blocker.position + Vector3(-3, 0, 0.2))
+	var min_d := INF
+	for _i in range(40):
+		walker.move(Vector3(1, 0, 0), 0.05)
+		min_d = minf(min_d, Vector2(walker.position.x - blocker.position.x, walker.position.z - blocker.position.z).length())
+	_check(min_d >= 1.2, "apprentices can't walk through trees")
 	_check(absf(walker.position.y - ter.height_at(walker.position.x, walker.position.z)) < 0.01, "apprentices follow the ground height")
 	w._despawn(walker)
 	var grass = ter.find_child("Grass", true, false)
@@ -293,6 +301,22 @@ func _initialize() -> void:
 	p.mana = 100.0
 	w.perform(p, "shield")
 	_check(p.shield_t > 0.0, "ESCUDO raises the shield")
+	var spot_hp_save: Vector3 = p.position
+	p.position = w.terrain.on_ground(Vector3(-40, 0, 40))  # far from any campfire
+	sh.position = p.position + Vector3(0.5, 1, 0)
+	var hp_shield: float = p.health
+	sh._attack_cd = 0.0
+	sh.tick(0.05, w, 0.0, 0.0)
+	_check(p.health == hp_shield, "ESCUDO blocks an Errante's blow")
+	p.shield_t = 0.0
+	var hp_hit: float = p.health
+	sh._attack_cd = 0.0
+	sh.tick(0.05, w, 0.0, 0.0)
+	var one_hit: float = hp_hit - p.health
+	sh.tick(0.05, w, 0.0, 0.0)
+	_check(one_hit > 0.0 and is_equal_approx(hp_hit - p.health, one_hit), "Errantes strike in discrete blows with a cooldown, not every frame")
+	p.position = spot_hp_save
+	sh.position = p.position + Vector3(4, 1, 0)
 	sh.hp = 30.0
 	p.mana = 100.0
 	var bones_on_ground: int = w.ground_items("bone").size()
@@ -327,6 +351,13 @@ func _initialize() -> void:
 	_force_night(w)
 	w.tick(0.5)
 	_check(lurker.position.distance_to(pos_before) > 0.01 and w.errante_target(lurker.position) == null, "unaware Errantes wander instead of hunting")
+
+	# ---------- which lights hurt Errantes ----------
+	_force_night(w)
+	var probe = w.spawn_shadow()
+	probe.position = p.position + Vector3(2, 1, 0)
+	_check(w.is_lit(probe.position, 0.0) and not w.burns_errante(probe.position, 0.0), "the wisp lights the way but does not burn Errantes")
+	_check(w.burns_errante(probe.position, 0.9), "sunlight burns Errantes")
 
 	# ---------- Blood Moon boss, Portal ----------
 	w.restart()

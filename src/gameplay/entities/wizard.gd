@@ -39,6 +39,7 @@ var noise := 0.0           # arcane noise 0..100: magic use draws the Errantes
 var dead := false
 var wisp_light: OmniLight3D
 var terrain = null         # set by the world: ground height + lakes
+var collider: Callable     # set by the world: pushes out of solid things
 var model: Node3D
 var rig: Rig
 var wisp_orb: Node3D
@@ -208,14 +209,30 @@ func move(dir: Vector3, delta: float) -> void:
 		rig.set_base("Running_A")
 	if model != null:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(dir.x, dir.z), minf(1.0, 12.0 * delta))
-	var next := position + dir.normalized() * Cfg.SPEED * delta
+	var step := dir.normalized() * Cfg.SPEED * delta
+	var next := position + step
+	if collider.is_valid():
+		next = collider.call(next)
 	next.x = clampf(next.x, -Cfg.WORLD, Cfg.WORLD)
 	next.z = clampf(next.z, -Cfg.WORLD, Cfg.WORLD)
 	if terrain != null:
 		if not terrain.is_walkable(next.x, next.z):
-			return  # lakes block the way (the shallow edge can be waded)
+			# slide along the shore instead of stopping dead
+			var along_x := Vector3(position.x + step.x, 0, position.z)
+			var along_z := Vector3(position.x, 0, position.z + step.z)
+			if terrain.is_walkable(along_x.x, along_x.z):
+				next = along_x
+			elif terrain.is_walkable(along_z.x, along_z.z):
+				next = along_z
+			else:
+				return
 		next.y = terrain.height_at(next.x, next.z)
 	position = next
+
+
+## A single blow (Errante attack): armor, perks and the shield apply.
+func hit(amount: float) -> void:
+	hurt(amount, 1.0)
 
 
 func hurt(dps: float, delta: float) -> void:
@@ -228,7 +245,7 @@ func hurt(dps: float, delta: float) -> void:
 		dmg -= absorbed
 		inventory.wear("body", absorbed)
 	health = maxf(0.0, health - dmg)
-	corrupt(4.0 * delta)
+	corrupt(minf(4.0, 4.0 * delta))
 	if _hurt_cd <= 0.0:
 		_hurt_cd = 1.2
 		play_action("hurt")

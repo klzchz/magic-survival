@@ -249,6 +249,7 @@ func _build_crafting(root: Control) -> void:
 	craft_panel.size = Vector2(330, 400)
 	craft_panel.add_theme_stylebox_override("panel", _panel_style(0.72))
 	root.add_child(craft_panel)
+	craft_panel.visible = false  # Tab opens it; keeps the island in view
 	var head := _label(craft_panel, "Criação  (Tab)", Vector2(12, 6), 16, title_font)
 	head.add_theme_color_override("font_color", GOLD)
 	var tabs: Array = Data.tabs()
