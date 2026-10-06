@@ -2,8 +2,11 @@
 
 Co-op wizard survival (Don't Starve Together model, original universe), built with
 49 coordinated Claude Code subagents. Vision: `design/gdd/game-concept.md`.
-Project-specific rule: zero external assets, everything (meshes, materials, lights)
-is generated in code via `src/core/art.gd`. Run the smoke suite before any commit:
+Asset rule: only CC0 / OFL assets, credited in `CREDITS.md` (KayKit models under
+`assets/kaykit/`, catalogued in `src/core/models.gd`; Cinzel font). Every model has a
+code-generated fallback (`src/core/art.gd`) so a missing file never breaks the game.
+Visual evidence: `MAGIC_SHOT=1 MAGIC_SHOT_AT=5 MAGIC_SHOT_PATH=<png> godot4 --path .`
+(`MAGIC_TIME=58` starts at the first night) -> `production/qa/evidence/`. Run the smoke suite before any commit:
 `godot4 --headless --path . -s tests/smoke.gd` (exit 0 = green).
 
 ## Technology Stack

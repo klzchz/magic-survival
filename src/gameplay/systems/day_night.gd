@@ -6,9 +6,13 @@ signal night_started(blood_moon: bool)
 signal dawn(nights: int)
 
 const Cfg = preload("res://src/core/config.gd")
-const SKY_DAY := Color(0.5, 0.65, 0.85)
-const SKY_NIGHT := Color(0.05, 0.06, 0.11)
-const SKY_BLOOD := Color(0.16, 0.03, 0.05)
+const SKY_DAY := Color(0.55, 0.62, 0.78)
+const SKY_NIGHT := Color(0.04, 0.05, 0.12)
+const SKY_BLOOD := Color(0.20, 0.03, 0.05)
+const HORIZON_DAY := Color(0.78, 0.66, 0.58)    # warm autumn haze
+const HORIZON_NIGHT := Color(0.16, 0.10, 0.26)  # violet dusk
+const SUN_DAY := Color(1.0, 0.86, 0.68)
+const MOON := Color(0.55, 0.65, 1.0)
 
 var t := 0.0
 var nights := 0
@@ -16,28 +20,43 @@ var blood_moon := false
 var prev_night := false
 var sun: DirectionalLight3D
 var env: Environment
+var sky_mat: ProceduralSkyMaterial
 
 
 func _ready() -> void:
+	sky_mat = ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = SKY_DAY
+	sky_mat.sky_horizon_color = HORIZON_DAY
+	sky_mat.ground_horizon_color = HORIZON_DAY
+	sky_mat.ground_bottom_color = Color(0.1, 0.1, 0.12)
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
 	env = Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = SKY_DAY
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.62, 0.72)
+	env.ambient_light_color = Color(0.62, 0.6, 0.75)
 	env.ambient_light_energy = 1.0
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.glow_enabled = true
+	env.glow_intensity = 0.9
+	env.glow_bloom = 0.15
+	env.glow_hdr_threshold = 0.9
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_light_color = SKY_DAY
-	env.fog_depth_begin = 22.0
-	env.fog_depth_end = 62.0
+	env.fog_light_color = HORIZON_DAY
+	env.fog_depth_begin = 38.0
+	env.fog_depth_end = 110.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, -40, 0)
+	sun.rotation_degrees = Vector3(-50, -35, 0)
 	sun.light_energy = 1.1
+	sun.light_color = SUN_DAY
 	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 70.0
 	add_child(sun)
 
 
@@ -70,8 +89,16 @@ func advance(delta: float) -> void:
 
 
 func apply_visuals(lit: float) -> void:
-	sun.light_energy = 0.12 + lit * 1.15
-	env.ambient_light_energy = 0.15 + lit * 0.85
+	# the sun becomes a cold moon at night (Blood Moon tints everything red)
+	var moon := Color(1.0, 0.35, 0.35) if blood_moon else MOON
+	sun.light_color = moon.lerp(SUN_DAY, lit)
+	sun.light_energy = 0.28 + lit * 0.95
+	env.ambient_light_energy = 0.22 + lit * 0.78
+	env.ambient_light_color = Color(0.32, 0.30, 0.55).lerp(Color(0.62, 0.6, 0.75), lit)
 	var night_sky := SKY_BLOOD if blood_moon else SKY_NIGHT
-	env.background_color = night_sky.lerp(SKY_DAY, lit)
-	env.fog_light_color = env.background_color
+	var top := night_sky.lerp(SKY_DAY, lit)
+	var horizon := (Color(0.35, 0.06, 0.08) if blood_moon else HORIZON_NIGHT).lerp(HORIZON_DAY, lit)
+	sky_mat.sky_top_color = top
+	sky_mat.sky_horizon_color = horizon
+	sky_mat.ground_horizon_color = horizon
+	env.fog_light_color = horizon

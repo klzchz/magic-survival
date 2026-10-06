@@ -1,15 +1,22 @@
 extends Camera3D
-# Don't Starve style follow camera: orthographic, orbiting its target on Y.
-# Movement is camera-relative, so the world asks it for forward() / right().
+# Don't Starve style follow camera: narrow-FOV perspective from high up,
+# orbiting its target on Y and easing after it. Movement is camera-relative,
+# so the world asks it for forward() / right().
+
+const DISTANCE := 14.0
+const HEIGHT := 14.5
 
 var target: Node3D
 var angle := 0.0           # radians
+var _focus := Vector3.ZERO
+var _snapped := false
 
 
 func _ready() -> void:
-	projection = PROJECTION_ORTHOGONAL
-	size = 22.0
-	far = 200.0
+	projection = PROJECTION_PERSPECTIVE
+	fov = 40.0
+	near = 0.5
+	far = 260.0
 	current = true
 
 
@@ -21,8 +28,12 @@ func right() -> Vector3:
 	return forward().cross(Vector3.UP).normalized()
 
 
-func follow() -> void:
+func follow(delta := 1.0) -> void:
 	if target == null or not is_inside_tree():
 		return
-	position = target.position + Vector3(sin(angle), 0, cos(angle)) * 20.0 + Vector3(0, 22, 0)
-	look_at(target.position + Vector3(0, 1, 0), Vector3.UP)
+	if not _snapped:
+		_focus = target.position
+		_snapped = true
+	_focus = _focus.lerp(target.position, minf(1.0, 6.0 * delta))
+	position = _focus + Vector3(sin(angle), 0, cos(angle)) * DISTANCE + Vector3(0, HEIGHT, 0)
+	look_at(_focus + Vector3(0, 1.2, 0), Vector3.UP)

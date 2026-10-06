@@ -7,7 +7,7 @@ spells from grimoire pages, brew in your cauldron, keep the wisp-light burning
 through the night, survive the **Blood Moon**, and gather **Mist Hearts** to
 reopen the Portal: the way back to the school.
 
-> Engine: **Godot 4.7** (GL Compatibility) · everything generated in code, zero external assets.
+> Engine: **Godot 4.7** (GL Compatibility) · stylized low-poly look with CC0 KayKit models (see [`CREDITS.md`](CREDITS.md)).
 > Verified headless: **57/57 smoke checks green**.
 > Design vision (co-op for 4, magic schools, Wanderers): [`design/gdd/game-concept.md`](design/gdd/game-concept.md).
 >
