@@ -19,6 +19,8 @@ const GatherableScene = preload("res://scenes/gatherable.tscn")
 const StructureScene = preload("res://scenes/structure.tscn")
 const PortalScene = preload("res://scenes/portal.tscn")
 const SelectScene = preload("res://scenes/character_select.tscn")
+const OverlayMenuScene = preload("res://scenes/overlay_menu.tscn")
+const CONTROLS_TEXT := "WASD mover  ·  Q / PgUp girar câmera  ·  E / Espaço agir (colher, cortar, minerar, pegar)\nF ou clique: feitiço  ·  Z Lume  ·  X Escudo  ·  1-0 usar item  ·  botão direito ou Shift+nº: assar / combustível / largar\nTab: criação  ·  Esc: pausa  ·  F11: tela cheia"
 
 const KEY_ACTIONS := {
 	KEY_E: "interact", KEY_SPACE: "interact", KEY_F: "bolt", KEY_Z: "lume", KEY_X: "shield",
@@ -49,6 +51,10 @@ var ambient: Node3D        # follows the local apprentice: fireflies + leaves
 var fireflies: CPUParticles3D
 var leaves: CPUParticles3D
 var select_screen = null
+var state := "menu"        # menu · select · playing · paused · ended
+var menu = null            # the open OverlayMenu, if any
+var _menu_return := ""     # where "Voltar" from Controles goes
+var last_character := DEFAULT_CHARACTER
 
 
 func _ready() -> void:
@@ -69,17 +75,114 @@ func _ready() -> void:
 	if forced != "" or DisplayServer.get_name() == "headless":
 		start_game(forced if forced != "" else DEFAULT_CHARACTER)
 	else:
-		hud.visible = false
-		select_screen = SelectScene.instantiate()
-		select_screen.chosen.connect(start_game)
-		add_child(select_screen)
+		_generate_world()  # the island is the main menu's backdrop
+		day_night.t = 39.0  # dusk
+		show_main_menu()
+
+
+# ---------- screens: main menu · character select · pause · game over ----------
+
+func _open_menu(title: String, sub: String, opts: Array, big := false) -> void:
+	_close_menu()
+	menu = OverlayMenuScene.instantiate()
+	menu.setup(title, sub, opts, big)
+	menu.picked.connect(_on_menu_pick)
+	add_child(menu)
+
+
+func _close_menu() -> void:
+	if menu != null:
+		menu.queue_free()
+		menu = null
+
+
+func show_main_menu() -> void:
+	_close_select()
+	for p in players():
+		_despawn(p)
+	local_player = null
+	camera_rig.target = null
+	started = false
+	won = false
+	game_over = false
+	state = "menu"
+	hud.visible = false
+	_open_menu("Magical Survive", "Aprendizes de magia presos na ilha da Névoa. Sobreviva, domine a magia e reabra o Portal.",
+		[["play", "Jogar"], ["fullscreen", "Tela cheia"], ["controls", "Controles"], ["quit", "Sair"]], true)
+
+
+func show_select() -> void:
+	_close_menu()
+	_close_select()
+	state = "select"
+	hud.visible = false
+	select_screen = SelectScene.instantiate()
+	select_screen.chosen.connect(start_game)
+	select_screen.back.connect(show_main_menu)
+	add_child(select_screen)
+
+
+func _close_select() -> void:
+	if select_screen != null:
+		select_screen.queue_free()
+		select_screen = null
+
+
+func pause() -> void:
+	if state != "playing":
+		return
+	state = "paused"
+	_open_menu("Pausado", "", [["resume", "Continuar"], ["controls", "Controles"], ["fullscreen", "Tela cheia"], ["menu", "Menu principal"], ["quit", "Sair do jogo"]])
+
+
+func resume() -> void:
+	_close_menu()
+	state = "playing"
+
+
+func _show_end_menu(victory: bool) -> void:
+	state = "ended"
+	var nights: int = day_night.nights
+	if victory:
+		_open_menu("O Portal se reabre!", "Vocês encontraram o caminho de volta ao Colégio em %d noites. O saber aprendido permanece." % nights,
+			[["again", "Jogar de novo"], ["select", "Trocar de aprendiz"], ["menu", "Menu principal"]])
+	else:
+		_open_menu("Você virou adubo", "Sobreviveu %d noites (melhor: %d). Os feitiços aprendidos permanecem." % [nights, meta.best_nights],
+			[["again", "Tentar de novo"], ["select", "Trocar de aprendiz"], ["menu", "Menu principal"]])
+
+
+func _on_menu_pick(id: String) -> void:
+	match id:
+		"play", "select":
+			show_select()
+		"again":
+			start_game(last_character)
+		"resume":
+			resume()
+		"menu":
+			show_main_menu()
+		"fullscreen":
+			toggle_fullscreen()
+		"controls":
+			_menu_return = state
+			_open_menu("Controles", CONTROLS_TEXT, [["controls_back", "Voltar"]])
+		"controls_back":
+			if _menu_return == "paused":
+				state = "playing"
+				pause()
+			else:
+				show_main_menu()
+		"quit":
+			get_tree().quit()
 
 
 ## Starts (or restarts) a run as the chosen character on a fresh island.
 func start_game(character: String) -> void:
-	if select_screen != null:
-		select_screen.queue_free()
-		select_screen = null
+	_close_select()
+	_close_menu()
+	last_character = character
+	state = "playing"
+	camera_rig.angle = 0.0
 	for p in players():
 		_despawn(p)
 	won = false
@@ -432,7 +535,14 @@ func tick(delta: float) -> void:
 		if shot_timer <= 0.0:
 			get_viewport().get_texture().get_image().save_png(shot_path)
 			print("MAGIC_SHOT saved: ", shot_path)
-	if not started:
+	if state == "menu" or state == "select":
+		# main-menu backdrop: slow orbit over the island at dusk
+		camera_rig.orbit(delta)
+		var l: float = day_night.light()
+		day_night.apply_visuals(l)
+		fireflies.emitting = l < 0.45
+		return
+	if not started or state == "paused":
 		return
 	if won or game_over:
 		camera_rig.follow(delta)
@@ -518,7 +628,7 @@ func _check_deaths() -> void:
 	if alive_players().is_empty() and not game_over:
 		game_over = true
 		meta.record_nights(day_night.nights)
-		hud.show_end("VOCÊ VIROU ADUBO. Sobreviveu %d noites (melhor: %d)\nO que você aprendeu permanece. R para renascer noutra ilha" % [day_night.nights, meta.best_nights])
+		_show_end_menu(false)
 
 
 func _on_night_start(blood_moon: bool) -> void:
@@ -739,7 +849,7 @@ func _try_portal(p) -> void:
 		q.celebrate()
 	meta.record_nights(day_night.nights)
 	meta.save()
-	hud.show_end("O PORTAL SE REABRE: vocês encontraram o caminho de volta à escola.\nSobreviveram %d noites. R para uma nova ilha (o saber permanece)" % day_night.nights)
+	_show_end_menu(true)
 
 
 func _cast_bolt(p) -> void:
@@ -810,11 +920,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if key != null and key.pressed and not key.echo and (key.keycode == KEY_F11 or (key.keycode == KEY_ENTER and key.alt_pressed)):
 		toggle_fullscreen()
 		return
-	if not started:
+	if key != null and key.pressed and not key.echo and key.keycode == KEY_ESCAPE:
+		match state:
+			"playing":
+				pause()
+			"paused":
+				resume()
+			"select":
+				show_main_menu()
+		return
+	if not started or (state != "playing" and state != "ended"):
 		return
 	if key != null and key.pressed and not key.echo:
 		if key.keycode == KEY_R and (won or game_over):
-			restart()
+			start_game(last_character)
 		elif key.keycode == KEY_TAB:
 			hud.toggle_crafting()
 		elif SLOT_KEYS.has(key.keycode):

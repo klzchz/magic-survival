@@ -28,6 +28,16 @@ func right() -> Vector3:
 	return forward().cross(Vector3.UP).normalized()
 
 
+## Main-menu backdrop: a slow, wide orbit over the island.
+func orbit(delta: float) -> void:
+	if not is_inside_tree():
+		return
+	angle += 0.06 * delta
+	_snapped = false
+	position = Vector3(sin(angle), 0, cos(angle)) * 34.0 + Vector3(0, 26, 0)
+	look_at(Vector3(0, 2, 0), Vector3.UP)
+
+
 func follow(delta := 1.0) -> void:
 	if target == null or not is_inside_tree():
 		return

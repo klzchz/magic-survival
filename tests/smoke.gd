@@ -317,6 +317,37 @@ func _initialize() -> void:
 	_step(w, 0.1)
 	_check(p.dead and not w.game_over, "one fallen apprentice does not end the run")
 
+	# ---------- menus: main menu · select · pause · game over ----------
+	w.show_main_menu()
+	_check(w.state == "menu" and w.players().is_empty() and w.menu != null, "main menu clears the island of apprentices")
+	w._on_menu_pick("play")
+	_check(w.state == "select" and w.select_screen != null and w.menu == null, "Jogar opens the character select")
+	w.select_screen.back.emit()
+	_check(w.state == "menu", "Voltar returns from the select to the main menu")
+	w._on_menu_pick("play")
+	w.select_screen.chosen.emit("brasa")
+	_check(w.state == "playing" and w.local_player.char_id == "brasa" and w.select_screen == null, "choosing a card starts the run")
+	w.pause()
+	var t_paused: float = w.day_night.t
+	_step(w, 1.0)
+	_check(w.state == "paused" and w.day_night.t == t_paused, "pause freezes the world")
+	w._on_menu_pick("controls")
+	w._on_menu_pick("controls_back")
+	_check(w.state == "paused" and w.menu != null, "Controles returns to the pause menu")
+	w._on_menu_pick("resume")
+	_check(w.state == "playing" and w.menu == null, "Continuar resumes")
+	w.local_player.health = 0.0
+	_step(w, 0.1)
+	_check(w.state == "ended" and w.menu != null, "death opens the game-over menu")
+	w._on_menu_pick("again")
+	_check(w.state == "playing" and w.local_player.char_id == "brasa" and not w.local_player.dead, "Tentar de novo restarts with the same apprentice")
+	w.local_player.health = 0.0
+	_step(w, 0.1)
+	w._on_menu_pick("select")
+	_check(w.state == "select", "Trocar de aprendiz goes back to the character select")
+	w.select_screen.chosen.emit("thorne")
+	_check(w.local_player.char_id == "thorne" and w.players().size() == 1, "a new apprentice starts a fresh run")
+
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Cfg.SAVE_PATH))
 	print("== done: %s ==" % ("ALL GREEN" if fails == 0 else "%d FAILURES" % fails))
 	quit(1 if fails > 0 else 0)

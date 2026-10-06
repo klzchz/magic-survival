@@ -4,6 +4,7 @@ extends CanvasLayer
 ## perks and flaw. Emits `chosen(character_id)`.
 
 signal chosen(character_id: String)
+signal back
 
 const Data = preload("res://src/core/data.gd")
 const Models = preload("res://src/core/models.gd")
@@ -41,6 +42,16 @@ func _ready() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_color_override("font_color", Color(0.85, 0.82, 0.92))
 	add_child(sub)
+
+	var back_btn := Button.new()
+	back_btn.text = "‹  Voltar"
+	back_btn.position = Vector2(30, 650)
+	back_btn.size = Vector2(150, 44)
+	back_btn.add_theme_font_size_override("font_size", 18)
+	if font != null:
+		back_btn.add_theme_font_override("font", font)
+	back_btn.pressed.connect(func(): back.emit())
+	add_child(back_btn)
 
 	var ids: Array = Data.table("characters").keys()
 	var gap := 30.0
