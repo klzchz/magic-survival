@@ -1,8 +1,8 @@
 [gd_scene load_steps=5 format=3]
 
-[ext_resource type="Script" path="res://scripts/world.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/systems/day_night.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/systems/camera_rig.gd" id="3"]
+[ext_resource type="Script" path="res://src/gameplay/world.gd" id="1"]
+[ext_resource type="Script" path="res://src/gameplay/systems/day_night.gd" id="2"]
+[ext_resource type="Script" path="res://src/gameplay/systems/camera_rig.gd" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="4"]
 
 [node name="World" type="Node3D"]

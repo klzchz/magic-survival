@@ -1,0 +1,62 @@
+# CCGS project configuration — single source of truth for project settings.
+# See .claude/docs/effects-map.md for full schema.
+
+schema_version: 1
+
+framework:
+  version: 1.1.2
+  last_upgraded: 2026-09-25
+
+# NOTE: this template ships with no `modes:` block, and the six knobs below must
+# never be added to one.
+#
+# `/start` DOES add `modes.rigor` and `modes.automation` here — that is its job,
+# and a `modes:` block containing those two is the expected state of a configured
+# project, not a mistake.
+#
+# What must stay absent is the six knobs `modes.rigor` FRONTS:
+# `modes.review_mode`, `modes.workflow`, `docs.density`, `qa.level`,
+# `modes.story_granularity` and `team.size`. Seeding any of them in this file
+# pins that value and shadows the rigor expansion, so `/start` asking "what are
+# you building?" would stop changing anything. `/start` Phase 3c documents the
+# same rule for the file it writes.
+#
+# Per-developer preferences belong in `project.local.yaml` (gitignored), not
+# here. `/settings --local <key>=<value>` writes there; `/settings <key>=<value>`
+# edits this file. See `.claude/docs/config-resolution.md` for the full
+# precedence order.
+
+engine:
+  name: "Godot"
+  version: "4.7.2"
+  language: "GDScript"
+  # Compatibility (not Forward+) on purpose: project.godot already uses
+  # gl_compatibility, and it renders on WSLg's software rasterizer. Change via /settings.
+  rendering: "Compatibility"
+  # 3D default. No physics bodies are used yet (movement is kinematic in code).
+  physics: "Jolt"
+
+specialists:
+  code: "godot-gdscript-specialist"
+  shader: "godot-shader-specialist"
+  ui: "godot-specialist"
+  additional: ["godot-gdextension-specialist"]
+
+naming:
+  classes: "PascalCase"
+  variables: "snake_case"
+  constants: "SCREAMING_SNAKE"
+  signals: "past_tense"
+  files: "snake_case"
+  scenes: "snake_case"
+
+commands:
+  build: "[TO BE CONFIGURED]"
+  # Custom SceneTree smoke suite (not gdUnit4): exit 0 green, 1 on any failure.
+  test: "godot4 --headless --path . -s tests/smoke.gd"
+  run: "godot4 --path . --windowed --resolution 1280x720"
+  smoke: "timeout 30 godot4 --headless --path . --quit-after 5"
+
+modes:
+  rigor: "minimal"
+  automation: "autonomous"

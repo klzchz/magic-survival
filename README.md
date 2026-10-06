@@ -9,7 +9,7 @@ reopen the Portal: the way back to the school.
 
 > Engine: **Godot 4.7** (GL Compatibility) · everything generated in code, zero external assets.
 > Verified headless: **57/57 smoke checks green**.
-> Design vision (co-op for 4, magic schools, Wanderers): [`docs/GDD.md`](docs/GDD.md).
+> Design vision (co-op for 4, magic schools, Wanderers): [`design/gdd/game-concept.md`](design/gdd/game-concept.md).
 >
 > Earlier versions are kept for history: the Godot 3.5 build in
 > [`legacy-godot3/`](legacy-godot3/) and the original Go/Ebitengine prototype in
@@ -23,16 +23,27 @@ reopen the Portal: the way back to the school.
 
 Or from a terminal: `godot4 --path .`
 
+## Studio workflow (Claude Code Game Studios)
+
+This repo runs the [Claude Code Game Studios](https://github.com/Donchitos/Claude-Code-Game-Studios)
+framework (v1.1.2): 49 agents, 74 skills, hooks and path-scoped rules under `.claude/`,
+configured for **Godot 4.7 + GDScript** in `project.yaml`. Open Claude Code in this
+folder and use `/help`, `/create-stories`, `/dev-story`, `/smoke-check`, etc.
+
 ## Architecture (Phase 1: co-op ready foundation)
 
 ```
-scenes/main.tscn         World root: DayNight, CameraRig, HUD + entity containers
+scenes/main.tscn          World root: DayNight, CameraRig, HUD + entity containers
   Players/ Shadows/ Resources/ Structures/ Decor/   (MultiplayerSpawner-ready)
-scenes/*.tscn            one scene per entity (wizard, shadow, gatherable, structure, portal, hud)
-scripts/world.gd         orchestrator: island gen, loop, perform(player, action) dispatcher
-scripts/entities/        wizard (per-apprentice stats + inventory), shadow AI, gatherable, structure, portal
-scripts/systems/         day_night clock + sky, Don't Starve camera rig
-scripts/core/            config constants, code-only art kit, meta save
+scenes/*.tscn             one scene per entity (wizard, shadow, gatherable, structure, portal, hud)
+src/gameplay/world.gd     orchestrator: island gen, loop, perform(player, action) dispatcher
+src/gameplay/entities/    wizard (per-apprentice stats + inventory), gatherable, structure, portal
+src/gameplay/systems/     day/night clock + sky, Don't Starve camera rig
+src/ai/                   Shadow behaviour
+src/ui/                   HUD
+src/core/                 config constants, code-only art kit, meta save
+src/networking/           (Phase 2: LAN co-op)
+tests/smoke.gd            headless smoke suite
 ```
 
 Every action goes through `world.perform(player, action)`, and Shadows hunt the
@@ -92,7 +103,7 @@ nearest living apprentice, so Phase 2 (network co-op) only adds peers and RPCs.
 Headless smoke suite (no editor needed):
 
 ```sh
-godot4 --headless --path . -s test/smoke.gd   # 57 checks, exits 0 on green
+godot4 --headless --path . -s tests/smoke.gd   # 57 checks, exits 0 on green
 ```
 
 Covers: world + ruins spawn, gather/chop/mine, eat/brew/cook, campfire,
