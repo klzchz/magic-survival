@@ -162,6 +162,24 @@ func _initialize() -> void:
 	var grass = ter.find_child("Grass", true, false)
 	_check(grass != null and grass.multimesh.instance_count > 1500, "dense grass field (MultiMesh)")
 
+	# ---------- three biomes, roads, landmarks ----------
+	_check(ter.biome_at(0, 0) == "flowered", "the clearing is in the flowered biome")
+	_check(ter.biome_at(w.gothic_center.x, w.gothic_center.y) == "gothic", "the Sunken Cathedral stands in the gothic biome")
+	_check(ter.biome_at(w.desert_center.x, w.desert_center.y) == "desert", "the desert centre is desert")
+	var dry := true
+	for road in [w.lamp_road, w.waystone_path, w.north_road, w.trail, w.old_trail]:
+		for i in range(road.size() - 1):
+			for k in range(11):
+				var q: Vector2 = road[i].lerp(road[i + 1], k / 10.0)
+				if ter.is_water(q.x, q.y):
+					dry = false
+	_check(dry, "every road reaches its biome without crossing water")
+	var kinds := {}
+	for l in ter.lakes:
+		kinds[l.get("biome", "")] = true
+	_check(kinds.has("flowered") and kinds.has("gothic") and kinds.has("desert"), "lakes in the south, dark ponds in the gothic, an oasis in the desert")
+	_check(Cfg.WORLD >= 150.0, "the island spans 300+ m (three biomes)")
+
 	# ---------- gather by hand, regrow ----------
 	# each tested node is moved to an isolated spot so neighbours never interfere
 	var tuft = w.resources_of("grass_tuft")[0]

@@ -53,7 +53,7 @@ static func chedi(parent: Node3D, pos: Vector3, scale := 1.0, ruined := true) ->
 
 
 ## A broken brick wall segment (length in metres) with a ragged top.
-static func wall(parent: Node3D, pos: Vector3, length := 5.0, rot := 0.0) -> Node3D:
+static func wall(parent: Node3D, pos: Vector3, length := 5.0, rot := 0.0, c1 := BRICK, c2 := BRICK_DARK) -> Node3D:
 	var root := Node3D.new()
 	root.position = pos
 	root.rotation.y = rot
@@ -61,7 +61,7 @@ static func wall(parent: Node3D, pos: Vector3, length := 5.0, rot := 0.0) -> Nod
 	var x := -length * 0.5
 	while x < length * 0.5:
 		var h := randf_range(0.6, 2.2)
-		_box(root, Vector3(1.0, h, 0.6), BRICK if randf() > 0.3 else BRICK_DARK, Vector3(x + 0.5, h * 0.5, 0))
+		_box(root, Vector3(1.0, h, 0.6), c1 if randf() > 0.3 else c2, Vector3(x + 0.5, h * 0.5, 0))
 		x += 1.0
 	return root
 
@@ -122,4 +122,78 @@ static func log_piece(parent: Node3D, pos: Vector3, length := 1.2, radius := 0.1
 	for side in [-1.0, 1.0]:
 		var ring := Art.add_mesh(root, Art.cylinder(radius * 0.92, radius * 0.92, 0.02), Art.mat(Color(0.78, 0.62, 0.42)), Vector3(side * length * 0.5, radius, 0))
 		ring.rotation.z = PI / 2.0
+	return root
+
+
+
+# ---------- desert ----------
+
+## The Great Obelisk: a tall sandstone needle with a glowing cap (landmark).
+static func obelisk(parent: Node3D, pos: Vector3, height := 18.0) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	var stone := Art.mat(Color(0.78, 0.6, 0.42))
+	_box(root, Vector3(4.0, 1.2, 4.0), Color(0.7, 0.52, 0.38), Vector3(0, 0.6, 0))
+	var shaft := Art.cylinder(0.7, 1.3, height)
+	shaft.radial_segments = 4
+	Art.add_mesh(root, shaft, stone, Vector3(0, 1.2 + height * 0.5, 0)).rotation.y = PI / 4.0
+	var cap := Art.cylinder(0.0, 0.75, 1.8)
+	cap.radial_segments = 4
+	var glow := Color(0.4, 0.9, 1.0)
+	Art.add_mesh(root, cap, Art.emissive(glow, glow * 2.0), Vector3(0, 1.2 + height + 0.9, 0)).rotation.y = PI / 4.0
+	Art.add_light(root, glow, 18.0, 1.6, Vector3(0, height + 1.5, 0))
+	return root
+
+
+## A cluster of arcane crystals (cyan / violet), emissive.
+static func crystals(parent: Node3D, pos: Vector3, count := 6, c := Color(0.45, 0.85, 1.0)) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	for i in range(count):
+		var h := randf_range(0.8, 2.6)
+		var cr := Art.cylinder(0.0, randf_range(0.18, 0.38), h)
+		cr.radial_segments = 6
+		var mi := Art.add_mesh(root, cr, Art.emissive(c, c * 1.3), Vector3(randf_range(-0.8, 0.8), h * 0.45, randf_range(-0.8, 0.8)))
+		mi.rotation = Vector3(randf_range(-0.4, 0.4), randf() * TAU, randf_range(-0.4, 0.4))
+	return root
+
+
+## A waystone cairn: stacked stones marking the desert path.
+static func cairn(parent: Node3D, pos: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	var y := 0.0
+	for i in range(4):
+		var r := 0.55 - i * 0.1
+		var st := Art.add_mesh(root, Art.sphere(r, r * 1.1), Art.mat(Color(0.62, 0.5, 0.4).darkened(i * 0.05)), Vector3(randf_range(-0.05, 0.05), y + r * 0.5, 0))
+		st.rotation.y = randf() * TAU
+		y += r * 0.95
+	return root
+
+
+# ---------- gothic ----------
+
+## A weathered stone statue on a plinth (a frozen guardian figure).
+static func plinth(parent: Node3D, pos: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	_box(root, Vector3(1.4, 1.2, 1.4), Color(0.32, 0.32, 0.35), Vector3(0, 0.6, 0))
+	_box(root, Vector3(1.6, 0.2, 1.6), Color(0.26, 0.26, 0.29), Vector3(0, 1.25, 0))
+	return root
+
+
+## A black rose bush: dark leaves with deep red blooms.
+static func black_roses(parent: Node3D, pos: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.position = pos
+	parent.add_child(root)
+	Art.add_mesh(root, Art.sphere(0.7, 0.9), Art.mat(Color(0.08, 0.12, 0.08)), Vector3(0, 0.4, 0))
+	var bloom := Art.emissive(Color(0.35, 0.02, 0.06), Color(0.25, 0.0, 0.03))
+	for i in range(7):
+		var a := randf() * TAU
+		Art.add_mesh(root, Art.sphere(0.12, 0.2), bloom, Vector3(cos(a) * 0.55, randf_range(0.45, 0.8), sin(a) * 0.55))
 	return root

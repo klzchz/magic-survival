@@ -1,7 +1,7 @@
 extends RefCounted
 # Tuning constants shared by every system. Preload as `Cfg` and read Cfg.X.
 
-const WORLD := 60.0           # ground half-extent (world spans -WORLD..WORLD on X/Z)
+const WORLD := 160.0          # ground half-extent (world spans -WORLD..WORLD on X/Z): 320 x 320 m, three biomes
 const SPEED := 10.5           # apprentice top speed (units/s)
 const ACCEL := 42.0           # ground acceleration (units/s^2)
 const DECEL := 36.0           # ground braking (units/s^2)

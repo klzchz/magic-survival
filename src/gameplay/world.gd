@@ -56,9 +56,19 @@ var world_seed := 0        # rebuilds the same island on Continue
 var shrine_center := Vector2.ZERO   # Shrine of the Sleeping Naga (end of the Lantern Trail)
 var trail: Array = []               # Lantern Trail polyline (clearing -> shrine)
 var old_trail: Array = []           # old trail to the Temple of the Portal
+var gothic_center := Vector2(-95, -88)   # Sunken Cathedral
+var desert_center := Vector2(95, -88)
+var obelisk_pos := Vector2.ZERO          # the Great Obelisk (desert landmark)
+var buried_temple := Vector2.ZERO        # half-buried chedi in the dunes
+var lamp_road: Array = []                # flowered -> gothic (iron lamps)
+var waystone_path: Array = []            # flowered -> desert (cairns)
+var north_road: Array = []               # gothic <-> desert (alternative loop)
 var objective_step := 0             # first-steps chain (see OBJECTIVES)
 var obj_flags := {}                 # tool_made, reached_shrine, found_page
 var _obj_done_t := 0.0              # shows "Concluído" briefly between steps
+var _fps_t := 0.0
+var _fps_frames := 0
+var _fps_done := false
 var _autopilot := false             # dev: walk the Lantern Trail and hop (movement video)
 var _auto_i := 1
 var _auto_jump_t := 1.5
@@ -572,6 +582,7 @@ func _spawn_resource(kind: String, pos: Vector3):
 	var g = GatherableScene.instantiate()
 	g.setup(kind)
 	g.position = terrain.on_ground(pos)
+	g.biome = terrain.biome_at(pos.x, pos.z)
 	resources_root.add_child(g)
 	return g
 
@@ -605,7 +616,7 @@ func _rand_pos() -> Vector3:
 
 
 func _ruins_center() -> Vector3:
-	return Vector3(-Cfg.WORLD + Cfg.RUINS_RADIUS + 4.0, 0.0, -Cfg.WORLD + Cfg.RUINS_RADIUS + 4.0)
+	return Vector3(-58.0, 0.0, 72.0)  # Temple of the Portal, south-west of the flowered biome
 
 
 func _ruins_pos() -> Vector3:
@@ -622,51 +633,78 @@ func _generate_world(seed_value := -1) -> void:
 			_despawn(n)
 	portal = null
 
-	# ---- layout: clearing -> Lantern Trail -> shrine; old trail -> temple ----
+	# ---- layout (design/gdd/world-biomes.md) ----
 	var rc := _ruins_center()
-	var ang := randf_range(-0.25, 1.8)            # the shrine lies away from the temple
-	var dir := Vector2(cos(ang), sin(ang))
-	shrine_center = dir * 32.0
-	var side := Vector2(-dir.y, dir.x)
-	trail = [dir * 6.0, dir * 16.0 + side * randf_range(-5.0, 5.0), dir * 26.0]
 	var temple := Vector2(rc.x, rc.z)
-	var to_t := (temple - Vector2.ZERO).normalized()
+	var ang := randf_range(0.5, 1.4)                 # the shrine lies south-east of the clearing
+	var dir := Vector2(cos(ang), sin(ang))
+	shrine_center = dir * 34.0
+	var side := Vector2(-dir.y, dir.x)
+	trail = [dir * 6.0, dir * 17.0 + side * randf_range(-5.0, 5.0), dir * 28.0]
+	var to_t := temple.normalized()
 	var t_side := Vector2(-to_t.y, to_t.x)
-	old_trail = [to_t * 6.0, to_t * 22.0 + t_side * 6.0, to_t * 42.0 - t_side * 4.0, temple - to_t * (Cfg.RUINS_RADIUS + 1.0)]
-	terrain.generate([{"center": Vector2.ZERO, "radius": 9.0}, {"center": temple, "radius": Cfg.RUINS_RADIUS + 3.0},
-		{"center": shrine_center, "radius": 7.0}], [trail + [shrine_center], old_trail])
+	old_trail = [to_t * 6.0, to_t * 35.0 + t_side * 7.0, to_t * 70.0 - t_side * 5.0, temple - to_t * (Cfg.RUINS_RADIUS + 1.0)]
+	gothic_center = Vector2(-95, -88) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+	desert_center = Vector2(95, -88) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+	var gate := gothic_center + (Vector2.ZERO - gothic_center).normalized() * 26.0
+	var d_entry := desert_center + (Vector2.ZERO - desert_center).normalized() * 30.0
+	lamp_road = [Vector2(-6, -6), Vector2(-28, -32) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), gate + (Vector2.ZERO - gate).normalized() * 30.0, gate]
+	waystone_path = [Vector2(6, -6), Vector2(30, -35) + Vector2(randf_range(-6, 6), randf_range(-6, 6)), d_entry + (Vector2.ZERO - d_entry).normalized() * 28.0, d_entry]
+	north_road = [gothic_center + Vector2(24, -14), Vector2(0, -132) + Vector2(randf_range(-10, 10), 0), desert_center + Vector2(-28, -18)]
+	obelisk_pos = desert_center + Vector2(-8, -34)
+	buried_temple = desert_center + Vector2(30, 18)
+	terrain.generate([
+		{"center": Vector2.ZERO, "radius": 9.0}, {"center": temple, "radius": Cfg.RUINS_RADIUS + 3.0},
+		{"center": shrine_center, "radius": 7.0}, {"center": gothic_center, "radius": 18.0},
+		{"center": obelisk_pos, "radius": 6.0}, {"center": buried_temple, "radius": 11.0}],
+		[trail + [shrine_center], old_trail, lamp_road, waystone_path, north_road])
 
+	# flowered south (the start, kept as it was)
 	_build_clearing(dir)
 	_build_trail(trail + [shrine_center], true)
 	_build_trail(old_trail, false)
 	_build_shrine(shrine_center, dir)
 	_build_temple(temple)
 	_build_forest()
+	# gothic north-west and magic desert north-east
+	_build_road(lamp_road, "lamp")
+	_build_road(waystone_path, "cairn")
+	_build_road(north_road, "cairn")
+	_build_gothic(gothic_center, gate)
+	_build_desert(desert_center)
 
-	for i in range(16):
-		_spawn_resource("rock", _wild_pos(4.0))
-	for i in range(22):
-		_spawn_resource("mushroom", _wild_pos(3.0))
-	for i in range(40):
-		_spawn_resource("grass_tuft", _wild_pos(3.0))
-	for i in range(30):
-		_spawn_resource("sapling", _wild_pos(3.0))
-	for i in range(16):
-		_spawn_resource("berry_bush", _wild_pos(3.5))
-	for i in range(22):  # flint lies on the ground: the first axe needs it
-		spawn_item("flint", 1, _wild_pos(2.0))
-	for i in range(70):  # meadow flowers, clover and pebbles
-		Models.spawn_variant(decor_root, "meadow", _wild_pos(1.5), randf_range(0.8, 1.2))
+	_scatter("flowered", {"rock": 14, "mushroom": 22, "grass_tuft": 40, "sapling": 30, "berry_bush": 16, "flint": 20})
+	_scatter("gothic", {"tree": 26, "rock": 14, "mushroom": 18, "berry_bush": 5, "flint": 10})
+	_scatter("desert", {"rock": 22, "flint": 18, "grass_tuft": 8})
+	for i in range(80):
+		var mp := _wild_pos(1.5, "flowered")
+		Models.cull(Models.spawn_variant(decor_root, "meadow", mp, randf_range(0.8, 1.2)), 70.0)
 	randomize()  # gameplay randomness stays unpredictable
 
 
-## A random dry spot that keeps trails, clearings and landmarks readable.
-func _wild_pos(trail_gap := 3.0) -> Vector3:
-	for _i in range(30):
+## Resources of a biome: {kind: count}; flint lies on the ground as items.
+func _scatter(biome: String, counts: Dictionary) -> void:
+	for kind in counts:
+		for i in range(int(counts[kind])):
+			var p := _wild_pos(3.0, biome)
+			if kind == "flint":
+				spawn_item("flint", 1, p)
+			else:
+				_spawn_resource(kind, p)
+
+
+## A random dry spot in a biome that keeps roads, clearings and landmarks readable.
+func _wild_pos(trail_gap := 3.0, biome := "flowered") -> Vector3:
+	for _i in range(60):
 		var p := _rand_pos()
+		if terrain.biome_at(p.x, p.z) != biome:
+			continue
 		if terrain.on_trail(p.x, p.z, trail_gap) or p.length() < 9.0:
 			continue
-		if Vector2(p.x, p.z).distance_to(shrine_center) < 8.0 or p.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS + 2.0:
+		var p2 := Vector2(p.x, p.z)
+		if p2.distance_to(shrine_center) < 8.0 or p.distance_to(_ruins_center()) < Cfg.RUINS_RADIUS + 2.0:
+			continue
+		if p2.distance_to(gothic_center) < 16.0 or p2.distance_to(obelisk_pos) < 6.0 or p2.distance_to(buried_temple) < 10.0:
 			continue
 		return p
 	return _rand_pos()
@@ -778,8 +816,8 @@ func _build_temple(t: Vector2) -> void:
 ## Woods, not noise: clusters of trees with undergrowth, a few lone trees,
 ## and bamboo groves near water; trails and clearings stay open.
 func _build_forest() -> void:
-	for c in range(15):
-		var center := _wild_pos(7.0)
+	for c in range(26):
+		var center := _wild_pos(7.0, "flowered")
 		for k in range(randi_range(4, 7)):
 			var p := terrain.on_ground(center + Vector3(randf_range(-6, 6), 0, randf_range(-6, 6)))
 			if terrain.on_trail(p.x, p.z, 4.0) or p.length() < 10.0 or terrain.is_water(p.x, p.z):
@@ -790,17 +828,154 @@ func _build_forest() -> void:
 			if not terrain.on_trail(u.x, u.z, 1.5) and not terrain.is_water(u.x, u.z):
 				Models.spawn_variant(decor_root, "undergrowth", u, randf_range(0.8, 1.3))
 	for i in range(12):
-		_spawn_resource("tree", _wild_pos(5.0))
-	for l in terrain.lakes:  # bamboo likes the water's edge
+		_spawn_resource("tree", _wild_pos(5.0, "flowered"))
+	for l in terrain.lakes.filter(func(x): return x.get("biome", "") == "flowered"):  # bamboo likes the water's edge
 		for k in range(2):
 			var a := randf() * TAU
 			var r: float = l.radius + randf_range(2.5, 4.5)
 			var bp := terrain.on_ground(Vector3(l.center.x + cos(a) * r, 0, l.center.y + sin(a) * r))
 			if not terrain.is_water(bp.x, bp.z):
 				_solid(Lanna.bamboo(decor_root, bp, randi_range(5, 8)), 1.0)
-	var landmark := Models.spawn(decor_root, "qn_twisted_1", _wild_pos(8.0))  # the old banyan: a far landmark
+	var landmark := Models.spawn(decor_root, "qn_twisted_1", _wild_pos(8.0, "flowered"))  # the old banyan: a far landmark
 	if landmark != null:
 		_solid(landmark, 2.0)
+
+
+
+## Lamp posts (old iron road) or cairns (waystones) along a long road.
+func _build_road(points: Array, marker: String) -> void:
+	var walked := 0.0
+	var next_mark := 10.0
+	var flip := 1.0
+	for i in range(points.size() - 1):
+		var a: Vector2 = points[i]
+		var b: Vector2 = points[i + 1]
+		var seg := b - a
+		var n := Vector2(-seg.y, seg.x).normalized()
+		var d := 0.0
+		while d < seg.length():
+			if walked + d >= next_mark:
+				var p := a + seg.normalized() * d + n * 2.8 * flip
+				var at := terrain.on_ground(Vector3(p.x, 0, p.y))
+				if marker == "lamp":
+					var lamp := Models.spawn(decor_root, "post_lantern", at, 0.9)
+					if lamp != null:
+						Art.add_light(lamp, Color(1.0, 0.75, 0.45), 6.0, 1.0, Vector3(0, 2.6, 0))
+						_solid(lamp, 0.35)
+					next_mark += 16.0
+				else:
+					_solid(Lanna.cairn(decor_root, at), 0.5)
+					next_mark += 18.0
+				flip = -flip
+			d += 2.0
+		walked += seg.length()
+
+
+## The gothic north-west: Sunken Cathedral, iron gate, statue garden, black
+## roses, graves, dead trees, dark ponds, candles. Dark but readable.
+func _build_gothic(c: Vector2, gate: Vector2) -> void:
+	var stone := Color(0.42, 0.42, 0.46)
+	var stone_dark := Color(0.3, 0.3, 0.34)
+	var at := terrain.on_ground(Vector3(c.x, 0, c.y))
+	var face := (gate - c).normalized()
+	var yaw := atan2(face.x, face.y)
+	var fwd := Vector3(face.x, 0, face.y)
+	var right := Vector3(face.y, 0, -face.x)
+	# Sunken Cathedral: two rows of pillars with arches, broken side walls, an apse
+	for i in range(6):
+		for s2 in [-1.0, 1.0]:
+			var pp: Vector3 = at + right * 6.0 * s2 + fwd * (8.0 - i * 4.0)
+			var pil := Models.spawn(decor_root, "ruin_pillar", terrain.on_ground(pp), 1.5)
+			if pil != null:
+				pil.set_meta("ruin", true)
+				Models.tint(pil, Color(0.75, 0.75, 0.82))
+			if i % 2 == 0:
+				var w := Lanna.wall(decor_root, terrain.on_ground(at + right * 8.5 * s2 + fwd * (6.0 - i * 4.0)), 3.5, yaw, stone, stone_dark)
+				w.set_meta("ruin", true)
+	for i in range(3):
+		var arch := Models.spawn(decor_root, "arch", terrain.on_ground(at + fwd * (8.0 - i * 8.0)), 1.6)
+		if arch != null:
+			arch.rotation.y = yaw
+			Models.tint(arch, Color(0.7, 0.7, 0.78))
+	var apse := Lanna.wall(decor_root, terrain.on_ground(at - fwd * 14.0), 12.0, yaw + PI * 0.5, stone, stone_dark)
+	apse.set_meta("ruin", true)
+	for i in range(5):
+		var cn := Models.spawn(decor_root, ["candles", "skull_candle"].pick_random(), terrain.on_ground(at - fwd * 11.0 + right * (i - 2) * 1.8), 1.2)
+		if cn != null and i % 2 == 0:
+			Art.add_light(cn, Color(1.0, 0.65, 0.35), 5.0, 1.0, Vector3(0, 1.0, 0))
+	# iron gate on the road
+	var g := Models.spawn(decor_root, "arch_gate", terrain.on_ground(Vector3(gate.x, 0, gate.y)), 1.7)
+	if g != null:
+		g.rotation.y = yaw
+		Models.tint(g, Color(0.6, 0.6, 0.66))
+	for s3 in [-1.0, 1.0]:
+		var gl := Models.spawn(decor_root, "post_lantern", terrain.on_ground(Vector3(gate.x, 0, gate.y) + right * 4.2 * s3), 1.0)
+		if gl != null:
+			Art.add_light(gl, Color(0.75, 0.8, 1.0), 7.0, 1.1, Vector3(0, 2.6, 0))
+			_solid(gl, 0.35)
+		for k in range(4):  # iron fence running away from the gate
+			var fp := terrain.on_ground(Vector3(gate.x, 0, gate.y) + right * (6.5 + k * 4.0) * s3)
+			var fence := Models.spawn(decor_root, ["fence_broken", "fence_post"].pick_random(), fp, 1.0)
+			if fence != null:
+				fence.rotation.y = yaw
+				fence.set_meta("ruin", true)
+	# statue garden: frozen guardians on plinths beside the cathedral
+	for i in range(6):
+		var sp := terrain.on_ground(at + right * 16.0 + fwd * (8.0 - i * 4.5))
+		var pl := Lanna.plinth(decor_root, sp)
+		_solid(pl, 0.9)
+		var st := Models.spawn(pl, ["skeleton_mage", "skeleton", "skeleton_boss"].pick_random(), Vector3(0, 1.35, 0), 0.75 if i % 3 != 2 else 0.5)
+		if st != null:
+			Models.overlay(st, null)
+			for mi in st.find_children("*", "MeshInstance3D", true, false):
+				(mi as MeshInstance3D).material_override = Art.mat(Color(0.5, 0.5, 0.54))
+			st.rotation.y = -yaw
+		Lanna.black_roses(decor_root, terrain.on_ground(sp + fwd * 2.0 + right * 1.5))
+	# graves, dead trees and dark firs across the biome
+	for i in range(30):
+		var p := _wild_pos(2.0, "gothic")
+		Models.cull(Models.spawn(decor_root, ["gravestone", "grave_a", "grave_b", "gravemarker_a", "gravemarker_b", "grave_a_broken"].pick_random(), p, 1.0), 80.0)
+	for i in range(16):
+		Lanna.black_roses(decor_root, _wild_pos(2.0, "gothic"))
+	for i in range(22):
+		var dt := Models.spawn(decor_root, ["dead_l", "dead_m", "dead_l_deco"].pick_random(), _wild_pos(4.0, "gothic"), randf_range(1.2, 1.8))
+		if dt != null:
+			_solid(dt, 0.5)
+
+
+## The magic desert north-east: dunes (terrain), the Great Obelisk landmark,
+## a buried temple, crystal fields, sandstone mesas, cairns, bones, the oasis.
+func _build_desert(c: Vector2) -> void:
+	_solid(Lanna.obelisk(decor_root, terrain.on_ground(Vector3(obelisk_pos.x, 0, obelisk_pos.y))), 2.2)
+	var bt := terrain.on_ground(Vector3(buried_temple.x, 0, buried_temple.y))
+	var sunk := Lanna.chedi(decor_root, bt + Vector3(0, -2.2, -3.0), 0.8, true)
+	Models.tint(sunk, Color(1.15, 1.0, 0.85))
+	_solid(sunk, 2.6)
+	sunk.set_meta("ruin", true)
+	for i in range(6):
+		var a := TAU * i / 6.0
+		var col := Models.spawn(decor_root, "column", terrain.on_ground(bt + Vector3(cos(a), 0, sin(a)) * 7.0) + Vector3(0, -randf_range(0.3, 1.2), 0), 1.0)
+		if col != null:
+			col.rotation.z = randf_range(-0.25, 0.25)
+			col.set_meta("ruin", true)
+			Models.tint(col, Color(1.2, 1.0, 0.8))
+	for k in range(6):  # crystal field
+		var cp := terrain.on_ground(Vector3(c.x - 34.0, 0, c.y + 8.0) + Vector3(randf_range(-10, 10), 0, randf_range(-10, 10)))
+		_solid(Lanna.crystals(decor_root, cp, randi_range(4, 8), [Color(0.45, 0.85, 1.0), Color(0.75, 0.5, 1.0)].pick_random()), 0.9)
+	for i in range(10):  # sandstone mesas
+		var mp := _wild_pos(6.0, "desert")
+		var mesa := Models.spawn(decor_root, "qn_rock_" + str(randi_range(1, 3)), mp, randf_range(2.2, 3.8))
+		if mesa != null:
+			mesa.rotation.y = randf() * TAU
+			Models.tint(mesa, Color(1.35, 1.0, 0.72))
+			_solid(mesa, 2.6)
+	for i in range(14):
+		Models.cull(Models.spawn(decor_root, ["ribcage", "bone_c", "skull", "dead_s"].pick_random(), _wild_pos(2.0, "desert"), 1.0), 70.0)
+	for l in terrain.lakes.filter(func(x): return x.get("biome", "") == "desert"):
+		for k in range(3):  # bamboo and reeds ring the oasis
+			var a2 := randf() * TAU
+			var r: float = l.radius + randf_range(2.0, 4.0)
+			_solid(Lanna.bamboo(decor_root, terrain.on_ground(Vector3(l.center.x + cos(a2) * r, 0, l.center.y + sin(a2) * r)), randi_range(4, 7)), 1.0)
 
 
 ## New island, same apprentices (knowledge persists).
@@ -823,6 +998,13 @@ func _process(delta: float) -> void:
 
 
 func tick(delta: float) -> void:
+	if Dev.has("fps"):
+		_fps_t += delta
+		if _fps_t > 3.0:
+			_fps_frames += 1
+			if _fps_t > 9.0 and not _fps_done:
+				_fps_done = true
+				print("FPS avg (3-9 s): %.1f over %d frames" % [_fps_frames / (_fps_t - 3.0), _fps_frames])
 	if shot_timer > 0.0:
 		shot_timer -= delta
 		if shot_timer <= 0.0:
@@ -857,11 +1039,13 @@ func tick(delta: float) -> void:
 				discover("darkness")
 				_say(p, "A Névoa te arranha no escuro! Acenda uma luz!")
 		p.update_wisp_light(lit)
-	day_night.apply_visuals(lit)
+	var mix := Vector3(1, 0, 0)
 	if local_player != null:
 		ambient.position = local_player.position
+		mix = terrain.biome_mix(local_player.position.x, local_player.position.z)
+	day_night.apply_visuals(lit, mix)
 	fireflies.emitting = lit < 0.45
-	leaves.emitting = lit > 0.5
+	leaves.emitting = lit > 0.5 and mix.x > 0.5  # falling leaves only in the flowered south
 
 	for fire in structures_of("campfire"):
 		fire.burn(delta)
@@ -1029,6 +1213,16 @@ func _stage_scene(scene: String) -> void:
 			camera_rig._snapped = false
 			if scene == "walk":
 				_autopilot = true
+		"gothic", "desert":
+			var target: Vector2 = gothic_center if scene == "gothic" else desert_center
+			var from := target + (Vector2.ZERO - target).normalized() * 34.0
+			p.position = terrain.on_ground(Vector3(from.x, 0, from.y))
+			var look := (target - from).normalized()
+			camera_rig.angle = atan2(-look.x, -look.y)
+			camera_rig._snapped = false
+			camera_rig.zoom = 1.3
+		"overview":
+			camera_rig.zoom = 1.45
 		"shrine":
 			var sd := shrine_center.normalized()
 			p.position = terrain.on_ground(Vector3(shrine_center.x, 0, shrine_center.y) - Vector3(sd.x, 0, sd.y) * 9.0)

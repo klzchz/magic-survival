@@ -10,6 +10,7 @@ const Data = preload("res://src/core/data.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
 
 var kind := "mushroom"
+var biome := "flowered"     # set by the world before add_child: picks the look
 var hp := 1
 var item_id := ""          # for kind "item": what lies on the ground
 var item_count := 1
@@ -100,7 +101,13 @@ func _ready() -> void:
 				Art.add_mesh(visual, Art.box(Vector3(0.5, 0.06, 0.65)), Art.emissive(Color(0.95, 0.9, 0.6), Color(0.9, 0.75, 0.2)), Vector3(0, 0.9, 0))
 			Art.add_light(visual, Color(1.0, 0.85, 0.4), 5.0, 1.2, Vector3(0, 1.3, 0))
 		"tree":
-			visual = Models.spawn_variant(self, "tree")
+			if biome == "gothic":
+				visual = Models.spawn(self, ["dead_l", "dead_m", "qn_pine_3", "qn_pine_1"].pick_random(), Vector3.ZERO, 1.3)
+				if visual != null:
+					Models.tint(visual, Color(0.55, 0.6, 0.62))
+					visual.rotation.y = randf() * TAU
+			else:
+				visual = Models.spawn_variant(self, "tree")
 			if visual == null:
 				visual = Node3D.new()
 				add_child(visual)
@@ -108,6 +115,10 @@ func _ready() -> void:
 				Art.add_mesh(visual, Art.sphere(1.7, 3.4), Art.mat(Color(0.11, 0.30, 0.15)), Vector3(0, 3.6, 0))
 		"rock":
 			visual = Models.spawn_variant(self, "rock", Vector3.ZERO, 1.0)
+			if biome == "desert":
+				Models.tint(visual, Color(1.35, 1.0, 0.72))
+			elif biome == "gothic":
+				Models.tint(visual, Color(0.6, 0.6, 0.68))
 			if visual == null:
 				visual = Art.add_mesh(self, Art.sphere(0.75, 1.0), Art.mat(Color(0.45, 0.46, 0.50)), Vector3(0, 0.35, 0))
 	set_process(kind == "page" or kind == "item")

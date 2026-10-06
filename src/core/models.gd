@@ -182,3 +182,30 @@ static func set_parts_visible(model: Node, names: Array, on: bool) -> void:
 		var n := model.find_child(part, true, false)
 		if n is Node3D:
 			(n as Node3D).visible = on
+
+
+## Tints every material under a model (duplicated, so the shared asset stays
+## intact): sandstone rocks in the desert, darker stone in the gothic ruins.
+static func tint(model: Node, c: Color) -> void:
+	if model == null:
+		return
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		var m := mi as MeshInstance3D
+		if m.mesh == null:
+			continue
+		for i in range(m.mesh.get_surface_count()):
+			var src := m.get_active_material(i)
+			if src is StandardMaterial3D:
+				var dup := (src as StandardMaterial3D).duplicate() as StandardMaterial3D
+				dup.albedo_color = dup.albedo_color * c
+				m.set_surface_override_material(i, dup)
+
+
+## Small props stop drawing beyond `dist` metres (performance on a big island).
+static func cull(model: Node, dist := 80.0) -> void:
+	if model == null:
+		return
+	for gi in model.find_children("*", "GeometryInstance3D", true, false):
+		(gi as GeometryInstance3D).visibility_range_end = dist
+	if model is GeometryInstance3D:
+		(model as GeometryInstance3D).visibility_range_end = dist

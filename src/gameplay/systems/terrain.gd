@@ -21,6 +21,14 @@ const MUD := Color(0.36, 0.27, 0.17)
 const SAND := Color(0.62, 0.52, 0.34)
 const ROCK := Color(0.42, 0.42, 0.40)
 const TRAIL := Color(0.55, 0.42, 0.27)
+# gothic: dark moss, slate, ash · desert: warm sand, darker ripples, sandstone
+const GOTH_MOSS := Color(0.16, 0.21, 0.15)
+const GOTH_SLATE := Color(0.24, 0.24, 0.27)
+const COBBLE := Color(0.33, 0.32, 0.34)
+const DUNE := Color(0.86, 0.72, 0.47)
+const SAND_DARK := Color(0.74, 0.57, 0.36)
+const SANDSTONE := Color(0.7, 0.5, 0.36)
+const BIOMES := ["flowered", "gothic", "desert"]
 
 var cfg := {}
 var water_level := -0.6
@@ -30,6 +38,9 @@ var paths: Array = []        # polylines (Array[Vector2]): trails painted and sm
 var _relief := FastNoiseLite.new()
 var _detail := FastNoiseLite.new()
 var _tint := FastNoiseLite.new()
+var _warp := FastNoiseLite.new()
+var _dune := FastNoiseLite.new()
+var biome_seeds := {}         # biome id -> Vector2 centre (from terrain.json)
 var _built: Node3D
 
 
@@ -58,26 +69,63 @@ func generate(clearing_list: Array, path_list: Array = []) -> void:
 	_detail.frequency = _c("detail_frequency", 0.09)
 	_tint.seed = randi()
 	_tint.frequency = 0.04
+	_warp.seed = randi()
+	_warp.frequency = 0.008
+	_dune.seed = randi()
+	_dune.frequency = 0.03
+	biome_seeds.clear()
+	var bs: Dictionary = cfg.get("biomes", {"flowered": [0, 60], "gothic": [-95, -88], "desert": [95, -88]})
+	for id in bs:
+		biome_seeds[id] = Vector2(float(bs[id][0]), float(bs[id][1]))
 	lakes.clear()
 	var radius_range: Array = cfg.get("lake_radius", [7.0, 12.0])
-	var tries := 0
-	while lakes.size() < int(_c("lakes", 4)) and tries < 200:
-		tries += 1
-		var r := randf_range(float(radius_range[0]), float(radius_range[1]))
-		var c := Vector2(randf_range(-Cfg.WORLD + r + 4, Cfg.WORLD - r - 4), randf_range(-Cfg.WORLD + r + 4, Cfg.WORLD - r - 4))
-		var ok := true
-		for path in paths:
-			if path_distance(c, path) < r + 6.0:
-				ok = false
-		for cl in clearings:
-			if c.distance_to(cl.center) < cl.radius + r + 8.0:
-				ok = false
-		for l in lakes:
-			if c.distance_to(l.center) < l.radius + r + 6.0:
-				ok = false
-		if ok:
-			lakes.append({"center": c, "radius": r, "depth": _c("lake_depth", 2.6)})
+	# lakes in the flowered south, dark ponds among the gothic ruins, one oasis
+	for spec in [["flowered", int(_c("lakes", 3)), radius_range, 2.6], ["gothic", int(_c("gothic_ponds", 2)), [6.0, 9.0], 2.2], ["desert", 1, [8.0, 8.0], 2.0]]:
+		var made := 0
+		var tries := 0
+		while made < spec[1] and tries < 300:
+			tries += 1
+			var r := randf_range(float(spec[2][0]), float(spec[2][1]))
+			var c := Vector2(randf_range(-Cfg.WORLD + r + 10, Cfg.WORLD - r - 10), randf_range(-Cfg.WORLD + r + 10, Cfg.WORLD - r - 10))
+			if biome_at(c.x, c.y) != spec[0] or biome_mix(c.x, c.y)[BIOMES.find(spec[0])] < 0.95:
+				continue
+			var ok := true
+			for path in paths:
+				if path_distance(c, path) < r + 6.0:
+					ok = false
+			for cl in clearings:
+				if c.distance_to(cl.center) < cl.radius + r + 8.0:
+					ok = false
+			for l in lakes:
+				if c.distance_to(l.center) < l.radius + r + 10.0:
+					ok = false
+			if ok:
+				lakes.append({"center": c, "radius": r, "depth": float(spec[3]), "biome": spec[0]})
+				made += 1
 	_rebuild()
+
+
+## Biome weights at a point (x = flowered, y = gothic, z = desert), sum 1.
+## Nearest-seed regions with noise-warped borders and a soft blend band.
+func biome_mix(x: float, z: float) -> Vector3:
+	if biome_seeds.is_empty():
+		return Vector3(1, 0, 0)
+	var w := _c("biome_warp", 20.0)
+	var p := Vector2(x + _warp.get_noise_2d(x, z) * w, z + _warp.get_noise_2d(z + 300.0, x) * w)
+	var d := Vector3(p.distance_to(biome_seeds.flowered), p.distance_to(biome_seeds.gothic), p.distance_to(biome_seeds.desert))
+	var nearest := minf(d.x, minf(d.y, d.z))
+	var blend := _c("biome_blend", 22.0)
+	var wts := Vector3(1.0 - smoothstep(0.0, blend, d.x - nearest), 1.0 - smoothstep(0.0, blend, d.y - nearest), 1.0 - smoothstep(0.0, blend, d.z - nearest))
+	return wts / maxf(wts.x + wts.y + wts.z, 0.0001)
+
+
+func biome_at(x: float, z: float) -> String:
+	var m := biome_mix(x, z)
+	if m.y > m.x and m.y > m.z:
+		return "gothic"
+	if m.z > m.x and m.z > m.y:
+		return "desert"
+	return "flowered"
 
 
 ## Distance from a point to a polyline trail.
@@ -102,7 +150,13 @@ func on_trail(x: float, z: float, extra := 0.0) -> bool:
 ## Ground height at a world XZ point (analytic, cheap: safe to call per frame).
 func height_at(x: float, z: float) -> float:
 	var p := Vector2(x, z)
-	var h := _relief.get_noise_2d(x, z) * _c("amplitude", 3.2) + _detail.get_noise_2d(x, z) * _c("detail_amplitude", 0.5)
+	var m := biome_mix(x, z)
+	var h_flower := _relief.get_noise_2d(x, z) * _c("amplitude", 3.2) + _detail.get_noise_2d(x, z) * _c("detail_amplitude", 0.5)
+	var h_goth := _relief.get_noise_2d(x * 1.4, z * 1.4) * _c("gothic_amplitude", 3.4) + absf(_detail.get_noise_2d(x * 0.6, z * 0.6)) * 1.2
+	# dunes: long ridges across the wind plus broad swells, never below the water
+	var ridge := 1.0 - absf(sin((x * 0.06 + z * 0.025) + _dune.get_noise_2d(x, z) * 2.5))
+	var h_desert := 0.6 + ridge * ridge * _c("desert_amplitude", 4.5) + _relief.get_noise_2d(x * 0.5, z * 0.5) * 2.0
+	var h := h_flower * m.x + h_goth * m.y + h_desert * m.z
 	for path in paths:  # trails smooth the relief so walking them feels easy
 		var dp := path_distance(p, path)
 		h *= lerpf(0.3, 1.0, smoothstep(2.0, 9.0, dp))
@@ -113,7 +167,7 @@ func height_at(x: float, z: float) -> float:
 		var d2: float = p.distance_to(l.center)
 		var edge_noise := _detail.get_noise_2d(x * 2.0, z * 2.0) * 1.5
 		var t := smoothstep(l.radius * 0.45, l.radius + edge_noise, d2)
-		h = lerpf(-float(l.depth), h, t)
+		h = lerpf(water_level - float(l.depth) * 0.7, h, t)
 	var out := maxf(absf(x), absf(z)) - Cfg.WORLD
 	if out > 0.0:  # the island rises into the forest rim
 		h += out * _c("border_rise", 0.45)
@@ -161,48 +215,64 @@ func _rebuild() -> void:
 
 func _ground_color(x: float, z: float, h: float, slope: float) -> Color:
 	var t := _tint.get_noise_2d(x, z) * 0.5 + 0.5
+	var m := biome_mix(x, z)
+	var flower := _flower_color(x, z, h, slope, t)
+	var goth := GOTH_MOSS.lerp(GOTH_SLATE, smoothstep(0.4, 0.8, t)).lerp(GOTH_SLATE.darkened(0.2), smoothstep(0.5, 0.9, slope))
+	var ripple := sin(x * 0.9 + z * 0.35 + _detail.get_noise_2d(x, z) * 3.0) * 0.5 + 0.5
+	var desert := DUNE.lerp(SAND_DARK, ripple * 0.35 + smoothstep(0.55, 0.85, t) * 0.3).lerp(SANDSTONE, smoothstep(0.5, 0.85, slope))
+	var c := flower * m.x + goth * m.y + desert * m.z
+	for path in paths:  # roads take the local material: earth, cobbles, packed sand
+		var dp := path_distance(Vector2(x, z), path)
+		var road := TRAIL.lerp(MUD, t * 0.4) * m.x + COBBLE.lerp(GOTH_SLATE, t * 0.5) * m.y + SAND_DARK * m.z
+		c = c.lerp(road, 1.0 - smoothstep(_c("path_width", 2.2) * 0.55, _c("path_width", 2.2), dp))
+	return c
+
+
+func _flower_color(x: float, z: float, h: float, slope: float, t: float) -> Color:
 	var c := GRASS_GREEN.lerp(GRASS_DRY, smoothstep(0.45, 0.85, t))
 	c = c.lerp(GRASS_GREEN.darkened(0.25), smoothstep(1.5, 3.5, h) * 0.5)   # darker moss on the hills
 	var shore := 1.0 - smoothstep(water_level + 0.05, water_level + 0.7, h)
 	c = c.lerp(SAND if t > 0.5 else MUD, shore)
 	c = c.lerp(MUD.darkened(0.3), 1.0 - smoothstep(water_level - 1.2, water_level, h))  # lake bed
-	c = c.lerp(ROCK, smoothstep(0.55, 0.9, slope))
-	for path in paths:  # packed-earth trail with soft edges
-		var dp := path_distance(Vector2(x, z), path)
-		c = c.lerp(TRAIL.lerp(MUD, t * 0.4), 1.0 - smoothstep(_c("path_width", 2.2) * 0.55, _c("path_width", 2.2), dp))
-	return c
+	return c.lerp(ROCK, smoothstep(0.55, 0.9, slope))
 
 
 func _build_ground() -> void:
-	var step := _c("grid_step", 1.0)
-	var extent := Cfg.WORLD + 32.0
+	var step := _c("grid_step", 2.0)
+	var extent := Cfg.WORLD + 40.0
 	var n := int(extent * 2.0 / step)
+	var heights := PackedFloat32Array()
+	heights.resize((n + 1) * (n + 1))
+	for iz in range(n + 1):
+		for ix in range(n + 1):
+			heights[iz * (n + 1) + ix] = height_at(-extent + ix * step, -extent + iz * step)
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
-	verts.resize((n + 1) * (n + 1))
-	normals.resize(verts.size())
-	colors.resize(verts.size())
+	verts.resize(heights.size())
+	normals.resize(heights.size())
+	colors.resize(heights.size())
 	for iz in range(n + 1):
 		for ix in range(n + 1):
+			var i := iz * (n + 1) + ix
 			var x := -extent + ix * step
 			var z := -extent + iz * step
-			var h := height_at(x, z)
-			var dx := height_at(x + 0.5, z) - height_at(x - 0.5, z)
-			var dz := height_at(x, z + 0.5) - height_at(x, z - 0.5)
-			var nrm := Vector3(-dx, 1.0, -dz).normalized()
-			var i := iz * (n + 1) + ix
-			verts[i] = Vector3(x, h, z)
+			var hl := heights[i - 1] if ix > 0 else heights[i]
+			var hr := heights[i + 1] if ix < n else heights[i]
+			var hd := heights[i - (n + 1)] if iz > 0 else heights[i]
+			var hu := heights[i + (n + 1)] if iz < n else heights[i]
+			var nrm := Vector3((hl - hr) / (2.0 * step), 1.0, (hd - hu) / (2.0 * step)).normalized()
+			verts[i] = Vector3(x, heights[i], z)
 			normals[i] = nrm
-			colors[i] = _ground_color(x, z, h, 1.0 - nrm.y)
+			colors[i] = _ground_color(x, z, heights[i], 1.0 - nrm.y)
 	for iz in range(n):
 		for ix in range(n):
-			var a := iz * (n + 1) + ix
-			var b := a + 1
-			var c := a + (n + 1)
-			var d := c + 1
-			indices.append_array([a, b, c, b, d, c])
+			var a2 := iz * (n + 1) + ix
+			var b2 := a2 + 1
+			var c2 := a2 + (n + 1)
+			var d2 := c2 + 1
+			indices.append_array([a2, b2, c2, b2, d2, c2])
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = verts
@@ -297,7 +367,9 @@ func _build_grass() -> void:
 			var cx := randf_range(-Cfg.WORLD, Cfg.WORLD)
 			var cz := randf_range(-Cfg.WORLD, Cfg.WORLD)
 			var dens := _tint.get_noise_2d(cx * 0.7, cz * 0.7) * 0.5 + 0.5
-			if randf() > dens + 0.25 or on_trail(cx, cz, 0.3):
+			var bm := biome_mix(cx, cz)
+			var allowed := bm.x if spec[0] == "qn_grass_short" else bm.x * 0.6 + bm.y * 0.5
+			if randf() > allowed or randf() > dens + 0.25 or on_trail(cx, cz, 0.3):
 				continue
 			for k in range(3):
 				var x := cx + randf_range(-0.8, 0.8)
@@ -325,6 +397,11 @@ func _build_shores() -> void:
 	for l in lakes:
 		var c: Vector2 = l.center
 		var r: float = l.radius
+		if l.get("biome", "flowered") == "desert":
+			for i in range(10):
+				var ao := randf() * TAU
+				var po := Vector3(c.x + cos(ao) * (r + randf_range(0.5, 3.0)), 0, c.y + sin(ao) * (r + randf_range(0.5, 3.0)))
+				Models.spawn(_built, ["qn_plant_1", "qn_fern", "waterplant_B"].pick_random(), on_ground(po), randf_range(1.0, 1.6))
 		for i in range(int(r * 0.8)):
 			var a := randf() * TAU
 			var d := randf_range(0.2, 0.75) * r
@@ -341,13 +418,19 @@ func _build_shores() -> void:
 
 
 func _build_forest_wall() -> void:
-	var edge := Cfg.WORLD + 4.0
-	for ring in [[edge, 6.0, 1.1, 1.5], [edge + 8.0, 8.0, 1.3, 1.8], [edge + 16.0, 9.0, 1.5, 2.0]]:
+	var edge := Cfg.WORLD + 5.0
+	for ring in [[edge, 9.0], [edge + 12.0, 14.0]]:
 		var e: float = ring[0]
 		var t := -e
 		while t <= e:
 			for side in [Vector3(t, 0, -e), Vector3(t, 0, e), Vector3(-e, 0, t), Vector3(e, 0, t)]:
-				var p: Vector3 = side + Vector3(randf_range(-2, 2), 0, randf_range(-2, 2))
+				var p: Vector3 = side + Vector3(randf_range(-3, 3), 0, randf_range(-3, 3))
 				p.y = height_at(p.x, p.z)
-				Models.spawn_variant(_built, "border_tree", p, randf_range(ring[2], ring[3]))
+				match biome_at(p.x, p.z):
+					"gothic":
+						Models.spawn(_built, ["dead_l", "dead_m", "qn_pine_3"].pick_random(), p, randf_range(1.3, 2.0))
+					"desert":
+						Models.spawn(_built, "qn_rock_" + str(randi_range(1, 3)), p, randf_range(2.0, 3.5))
+					_:
+						Models.spawn_variant(_built, "border_tree", p, randf_range(1.2, 1.7))
 			t += ring[1]

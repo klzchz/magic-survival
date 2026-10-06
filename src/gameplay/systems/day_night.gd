@@ -88,7 +88,9 @@ func advance(delta: float) -> void:
 		dawn.emit(nights)
 
 
-func apply_visuals(lit: float) -> void:
+## lit: 0 night .. 1 midday · mix: biome weights at the camera's focus
+## (x flowered, y gothic, z desert) so fog, light and haze follow the region.
+func apply_visuals(lit: float, mix := Vector3(1, 0, 0)) -> void:
 	# the sun becomes a cold moon at night (Blood Moon tints everything red)
 	var moon := Color(1.0, 0.35, 0.35) if blood_moon else MOON
 	sun.light_color = moon.lerp(SUN_DAY, lit)
@@ -101,4 +103,12 @@ func apply_visuals(lit: float) -> void:
 	sky_mat.sky_top_color = top
 	sky_mat.sky_horizon_color = horizon
 	sky_mat.ground_horizon_color = horizon
-	env.fog_light_color = horizon
+	# regional atmosphere
+	var goth_fog := Color(0.32, 0.36, 0.45).lerp(Color(0.1, 0.11, 0.16), 1.0 - lit)
+	var desert_fog := Color(0.96, 0.84, 0.62).lerp(Color(0.3, 0.22, 0.25), 1.0 - lit)
+	env.fog_light_color = horizon * mix.x + goth_fog * mix.y + desert_fog * mix.z
+	env.fog_depth_begin = 38.0 * mix.x + 14.0 * mix.y + 55.0 * mix.z
+	env.fog_depth_end = 110.0 * mix.x + 70.0 * mix.y + 160.0 * mix.z
+	sun.light_energy *= 1.0 * mix.x + 0.62 * mix.y + 1.12 * mix.z
+	env.ambient_light_energy *= 1.0 * mix.x + 0.75 * mix.y + 1.1 * mix.z
+	env.ambient_light_color = env.ambient_light_color * mix.x + Color(0.42, 0.45, 0.6) * mix.y + Color(0.75, 0.68, 0.55) * mix.z
