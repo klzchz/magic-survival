@@ -15,6 +15,7 @@ const Dev = preload("res://src/core/dev.gd")
 const ItemArt = preload("res://src/core/item_art.gd")
 const Lanna = preload("res://src/core/lanna.gd")
 const SOLID := {"tree": 0.8, "rock": 0.85, "berry_bush": 0.6}   # collision radius per resource kind
+const OBJECTIVES := ["gather", "tool", "fire", "shrine", "page"]
 const FOOTPRINT := {"campfire": 1.4, "altar": 1.6, "ward": 1.0, "cauldron": 1.4, "cabin": 3.6}
 const MetaSave = preload("res://src/core/meta_save.gd")
 const Terrain = preload("res://src/gameplay/systems/terrain.gd")
@@ -27,10 +28,10 @@ const StructureScene = preload("res://scenes/structure.tscn")
 const PortalScene = preload("res://scenes/portal.tscn")
 const SelectScene = preload("res://scenes/character_select.tscn")
 const OverlayMenuScene = preload("res://scenes/overlay_menu.tscn")
-const CONTROLS_TEXT := "WASD mover  ·  Q / PgUp girar câmera  ·  E / Espaço agir (colher, cortar, minerar, pegar)\nF ou clique: feitiço  ·  Z Lume  ·  X Escudo  ·  1-0 usar item  ·  botão direito ou Shift+nº: assar / combustível / largar\nTab: criação  ·  Esc: pausa  ·  F11: tela cheia"
+const CONTROLS_TEXT := "WASD mover  ·  Q / PgUp girar câmera  ·  E agir (colher, cortar, minerar, pegar)  ·  Espaço: salto mágico\nF ou clique: feitiço  ·  Z Lume  ·  X Escudo  ·  1-0 usar item  ·  botão direito ou Shift+nº: assar / combustível / largar\nTab: criação  ·  Esc: pausa  ·  F11: tela cheia"
 
 const KEY_ACTIONS := {
-	KEY_E: "interact", KEY_SPACE: "interact", KEY_F: "bolt", KEY_Z: "lume", KEY_X: "shield",
+	KEY_E: "interact", KEY_SPACE: "jump", KEY_F: "bolt", KEY_Z: "lume", KEY_X: "shield",
 }
 const SLOT_KEYS := [KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_0]
 const DROP_TABLE := {"bone": 1.0, "essence": 0.5}   # per spell-killed Shadow (chance)
@@ -55,6 +56,9 @@ var world_seed := 0        # rebuilds the same island on Continue
 var shrine_center := Vector2.ZERO   # Shrine of the Sleeping Naga (end of the Lantern Trail)
 var trail: Array = []               # Lantern Trail polyline (clearing -> shrine)
 var old_trail: Array = []           # old trail to the Temple of the Portal
+var objective_step := 0             # first-steps chain (see OBJECTIVES)
+var obj_flags := {}                 # tool_made, reached_shrine, found_page
+var _obj_done_t := 0.0              # shows "Concluído" briefly between steps
 var placing := ""          # structure recipe being placed (preview mode)
 var place_ok := false
 var place_why := ""
@@ -145,6 +149,8 @@ func continue_run() -> bool:
 	day_night.blood_moon = bool(c.blood_moon)
 	day_night.prev_night = bool(c.prev_night)
 	run_hearts = int(data.run_hearts)
+	objective_step = int(data.get("objective_step", 0))
+	obj_flags = data.get("obj_flags", {})
 	var p = local_player
 	var ps: Dictionary = data.player
 	p.position = RunSave.vec(ps.pos)
@@ -263,6 +269,8 @@ func start_game(character: String, seed_value := -1) -> void:
 	last_character = character
 	state = "playing"
 	run_hearts = 0
+	objective_step = 0
+	obj_flags = {}
 	cancel_placement()
 	camera_rig.angle = 0.0
 	for p in players():
@@ -362,6 +370,57 @@ func _max_noise() -> float:
 	for p in alive_players():
 		m = maxf(m, p.noise)
 	return m
+
+
+# ---------- first steps: one objective at a time ----------
+
+func _objective_met(id: String, p) -> bool:
+	match id:
+		"gather":
+			return (p.inventory.count("grass") >= 3 and p.inventory.count("twig") >= 2) or obj_flags.get("tool_made", false) or not structures_of("campfire").is_empty()
+		"tool":
+			return obj_flags.get("tool_made", false)
+		"fire":
+			return not structures_of("campfire").is_empty()
+		"shrine":
+			return obj_flags.get("reached_shrine", false)
+		"page":
+			return obj_flags.get("found_page", false)
+	return true
+
+
+func _update_objectives(p) -> void:
+	if p == null:
+		return
+	if p.inventory.count("axe") > 0 or p.inventory.count("pickaxe") > 0:
+		obj_flags["tool_made"] = true
+	if Vector2(p.position.x, p.position.z).distance_to(shrine_center) < 8.0:
+		obj_flags["reached_shrine"] = true
+	while objective_step < OBJECTIVES.size() and _objective_met(OBJECTIVES[objective_step], p):
+		objective_step += 1
+		_obj_done_t = 2.5
+
+
+## What the HUD shows: the current objective, its progress and completion.
+func objective_info() -> Dictionary:
+	var p = local_player
+	if p == null:
+		return {}
+	if objective_step >= OBJECTIVES.size():
+		return {"title": "Primeiros passos concluídos", "text": "Explore, sobreviva à noite e siga a trilha velha até o Templo do Portal.", "done": true, "fresh": _obj_done_t > 0.0}
+	match OBJECTIVES[objective_step]:
+		"gather":
+			return {"title": "Colete materiais (E)", "text": "Capim %d/3  ·  Galho %d/2" % [mini(p.inventory.count("grass"), 3), mini(p.inventory.count("twig"), 2)], "fresh": _obj_done_t > 0.0}
+		"tool":
+			return {"title": "Fabrique uma ferramenta (Tab)", "text": "Machado: 1 galho + 1 pederneira (pederneira fica no chão)", "fresh": _obj_done_t > 0.0}
+		"fire":
+			return {"title": "Prepare uma fogueira", "text": "Tab > Luz > Fogueira: 3 capim + 2 toras (corte árvores com o machado)", "fresh": _obj_done_t > 0.0}
+		"shrine":
+			var dist := Vector2(p.position.x, p.position.z).distance_to(shrine_center)
+			return {"title": "Siga a Trilha das Lanternas", "text": "Santuário da Naga Adormecida: faltam %d m" % int(dist), "fresh": _obj_done_t > 0.0}
+		"page":
+			return {"title": "Descubra a página do grimório", "text": "Pegue a página no altar do santuário (E)", "fresh": _obj_done_t > 0.0}
+	return {}
 
 
 ## Records a grimoire discovery (permanent) and tells the player once.
@@ -830,6 +889,8 @@ func tick(delta: float) -> void:
 
 	if placing != "":
 		_update_placement()
+	_obj_done_t = maxf(0.0, _obj_done_t - delta)
+	_update_objectives(local_player)
 	camera_rig.follow(delta)
 	hud.refresh(local_player, self)
 
@@ -960,6 +1021,8 @@ func perform(p, action: String) -> void:
 	match parts[0]:
 		"interact":
 			_interact(p)
+		"jump":
+			p.jump()
 		"use":
 			var before: float = p.noise
 			_say(p, p.use_slot(int(parts[1])))
@@ -1224,6 +1287,7 @@ func _interact(p) -> void:
 		return
 	if kind == "page":
 		_despawn(best)
+		obj_flags["found_page"] = true
 		_learn_next_spell(p)
 		discover("page")
 		return
@@ -1354,7 +1418,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if placing != "" and state == "playing":
 		var mb := event as InputEventMouseButton
-		if key != null and key.pressed and not key.echo and (key.keycode == KEY_E or key.keycode == KEY_SPACE or key.keycode == KEY_ENTER):
+		if key != null and key.pressed and not key.echo and (key.keycode == KEY_E or key.keycode == KEY_ENTER):
 			confirm_placement()
 			return
 		if (key != null and key.pressed and key.keycode == KEY_ESCAPE) or (mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT):
@@ -1387,5 +1451,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			perform(local_player, KEY_ACTIONS[key.keycode])
 		return
 	var mouse := event as InputEventMouseButton
-	if mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
+	if mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_WHEEL_UP:
+		camera_rig.zoom_by(-0.08)
+	elif mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		camera_rig.zoom_by(0.08)
+	elif mouse != null and mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
 		perform(local_player, "bolt")

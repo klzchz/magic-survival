@@ -161,3 +161,26 @@ static func noise_ring(parent: Node3D, pos: Vector3, radius: float) -> void:
 	tw.tween_property(mi, "scale", Vector3(radius, 0.05, radius), 1.1).set_ease(Tween.EASE_OUT)
 	tw.tween_property(m, "albedo_color:a", 0.0, 1.1)
 	tw.chain().tween_callback(mi.queue_free)
+
+
+## One-shot sparkle burst (magic hop take-off / landing). Frees itself.
+static func magic_puff(parent: Node3D, pos: Vector3, c: Color, amount := 26) -> void:
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.22, 0.22)
+	var p := _particles(parent, amount, 0.6, quad, _glow_mat(c), pos + Vector3(0, 0.2, 0))
+	p.one_shot = true
+	p.explosiveness = 0.92
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	p.emission_ring_axis = Vector3.UP
+	p.emission_ring_radius = 0.6
+	p.emission_ring_inner_radius = 0.3
+	p.emission_ring_height = 0.05
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 3.0
+	p.gravity = Vector3(0, -2.0, 0)
+	p.color_ramp = _fade(Color(c.r, c.g, c.b, 1.0), Color(c.r, c.g, c.b, 0.0))
+	p.emitting = true
+	if p.is_inside_tree():
+		p.get_tree().create_timer(1.0).timeout.connect(p.queue_free)

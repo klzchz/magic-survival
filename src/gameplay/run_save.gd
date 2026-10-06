@@ -44,6 +44,8 @@ static func snapshot(w) -> Dictionary:
 		"character": p.char_id,
 		"clock": {"t": w.day_night.t, "nights": w.day_night.nights, "blood_moon": w.day_night.blood_moon, "prev_night": w.day_night.prev_night},
 		"run_hearts": w.run_hearts,
+		"objective_step": w.objective_step,
+		"obj_flags": w.obj_flags,
 		"player": {"pos": _v(p.position), "health": p.health, "hunger": p.hunger, "mana": p.mana,
 			"corruption": p.corruption, "wisp": p.wisp, "noise": p.noise,
 			"slots": p.inventory.slots, "equip": p.inventory.equip},

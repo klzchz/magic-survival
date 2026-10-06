@@ -11,6 +11,7 @@ const Models = preload("res://src/core/models.gd")
 const Rig = preload("res://src/core/rig.gd")
 const Data = preload("res://src/core/data.gd")
 const Inventory = preload("res://src/gameplay/inventory.gd")
+const Fx = preload("res://src/core/fx.gd")
 # action id -> KayKit animation
 const ACTION_ANIMS := {
 	"chop": "1H_Melee_Attack_Chop", "pickup": "PickUp", "bolt": "Spellcast_Shoot",
@@ -39,6 +40,9 @@ var noise := 0.0           # arcane noise 0..100: magic use draws the Errantes
 var guard_t := 0.0         # Talismã do Guardião: -50% damage while > 0
 var hush_t := 0.0          # Talismã do Silêncio: -70% noise while > 0
 var resting := false       # resting in the cabin (time flies, heals, hungrier)
+var velocity := Vector3.ZERO  # horizontal velocity (accelerates / brakes)
+var air := 0.0             # height above the ground while hopping
+var vy := 0.0              # vertical speed of the hop
 var dead := false
 var wisp_light: OmniLight3D
 var terrain = null         # set by the world: ground height + lakes
@@ -117,6 +121,9 @@ func respawn(at: Vector3, eco: bool) -> void:
 	shield_t = 0.0
 	dark_t = 0.0
 	noise = 0.0
+	velocity = Vector3.ZERO
+	air = 0.0
+	vy = 0.0
 	guard_t = 0.0
 	hush_t = 0.0
 	resting = false
@@ -212,18 +219,69 @@ func refresh_gear() -> void:
 		torch_light.light_color = Color(0.7, 0.55, 1.0) if hand == "lantern" else Color(1.0, 0.65, 0.3)
 
 
-func move(dir: Vector3, delta: float) -> void:
-	if dir.length() < 0.01:
-		if rig != null:
-			rig.set_base("Idle")
-		return
+func on_ground() -> bool:
+	return air <= 0.0 and vy <= 0.0
+
+
+## Effects live in the world, never inside the Players container.
+func _fx_host() -> Node3D:
+	var p := get_parent()
+	if p != null and p.get_parent() is Node3D:
+		return p.get_parent()
+	return null
+
+
+## Magic hop (Space): a short arc with a sparkle on take-off and landing.
+## Obstacles, lakes and the island edge still apply while airborne.
+func jump() -> bool:
+	if dead or not on_ground():
+		return false
+	vy = Cfg.JUMP_VELOCITY
+	air = 0.001
+	resting = false
 	if rig != null:
-		rig.set_base("Running_A")
-	if model != null:
-		model.rotation.y = lerp_angle(model.rotation.y, atan2(dir.x, dir.z), minf(1.0, 12.0 * delta))
-	var step := dir.normalized() * Cfg.SPEED * delta
+		rig.action("Jump_Start")
+		rig.set_base("Jump_Idle")
+	if _fx_host() != null:
+		Fx.magic_puff(_fx_host(), position, Color(0.7, 0.85, 1.0))
+	return true
+
+
+## Called every frame with the input direction (zero = no input): it
+## accelerates, brakes, steers, applies the hop and keeps the apprentice on
+## walkable ground (obstacles slide, lakes stop, edges clamp).
+func move(dir: Vector3, delta: float) -> void:
+	var has_input := dir.length() > 0.01
+	var target := dir.normalized() * Cfg.SPEED if has_input else Vector3.ZERO
+	var rate := (Cfg.ACCEL if has_input else Cfg.DECEL) * (1.0 if on_ground() else Cfg.AIR_CONTROL)
+	velocity = velocity.move_toward(target, rate * delta)
+	var speed := velocity.length()
+	if rig != null and on_ground():
+		if speed > 0.4:
+			rig.set_base("Running_A")
+			if rig.ap != null:
+				rig.ap.speed_scale = clampf(speed / 8.0, 0.6, 1.4)
+		else:
+			rig.set_base("Idle")
+			if rig.ap != null:
+				rig.ap.speed_scale = 1.0
+	if model != null and speed > 0.3:
+		model.rotation.y = lerp_angle(model.rotation.y, atan2(velocity.x, velocity.z), minf(1.0, 12.0 * delta))
+	# vertical: the hop
+	if air > 0.0 or vy > 0.0:
+		vy -= Cfg.GRAVITY * delta
+		air += vy * delta
+		if air <= 0.0:
+			air = 0.0
+			vy = 0.0
+			if rig != null:
+				rig.action("Jump_Land")
+				rig.set_base("Running_A" if speed > 0.4 else "Idle")
+			if _fx_host() != null:
+				Fx.magic_puff(_fx_host(), position, Color(0.75, 0.6, 1.0), 16)
+	var step := velocity * delta
 	var next := position + step
-	if collider.is_valid():
+	if collider.is_valid() and speed > 0.0:
 		next = collider.call(next)
 	next.x = clampf(next.x, -Cfg.WORLD, Cfg.WORLD)
 	next.z = clampf(next.z, -Cfg.WORLD, Cfg.WORLD)
@@ -234,15 +292,19 @@ func move(dir: Vector3, delta: float) -> void:
 			var along_z := Vector3(position.x, 0, position.z + step.z)
 			if terrain.is_walkable(along_x.x, along_x.z):
 				next = along_x
+				velocity.z = 0.0
 			elif terrain.is_walkable(along_z.x, along_z.z):
 				next = along_z
+				velocity.x = 0.0
 			else:
-				return
-		next.y = terrain.height_at(next.x, next.z)
+				next = Vector3(position.x, 0, position.z)
+				velocity = Vector3.ZERO
+		next.y = terrain.height_at(next.x, next.z) + air
+	else:
+		next.y = air
 	position = next
 
 
-## A single blow (Errante attack): armor, perks and the shield apply.
 func hit(amount: float) -> void:
 	hurt(amount, 1.0)
 

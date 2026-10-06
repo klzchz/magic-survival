@@ -6,10 +6,10 @@ signal night_started(blood_moon: bool)
 signal dawn(nights: int)
 
 const Cfg = preload("res://src/core/config.gd")
-const SKY_DAY := Color(0.55, 0.62, 0.78)
+const SKY_DAY := Color(0.38, 0.6, 0.86)
 const SKY_NIGHT := Color(0.04, 0.05, 0.12)
 const SKY_BLOOD := Color(0.20, 0.03, 0.05)
-const HORIZON_DAY := Color(0.78, 0.66, 0.58)    # warm autumn haze
+const HORIZON_DAY := Color(0.82, 0.8, 0.7)     # humid tropical haze    # warm autumn haze
 const HORIZON_NIGHT := Color(0.16, 0.10, 0.26)  # violet dusk
 const SUN_DAY := Color(1.0, 0.86, 0.68)
 const MOON := Color(0.55, 0.65, 1.0)
@@ -52,7 +52,7 @@ func _ready() -> void:
 	add_child(we)
 
 	sun = DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-50, -35, 0)
+	sun.rotation_degrees = Vector3(-38, -42, 0)
 	sun.light_energy = 1.1
 	sun.light_color = SUN_DAY
 	sun.shadow_enabled = true
@@ -92,8 +92,8 @@ func apply_visuals(lit: float) -> void:
 	# the sun becomes a cold moon at night (Blood Moon tints everything red)
 	var moon := Color(1.0, 0.35, 0.35) if blood_moon else MOON
 	sun.light_color = moon.lerp(SUN_DAY, lit)
-	sun.light_energy = 0.28 + lit * 0.95
-	env.ambient_light_energy = 0.22 + lit * 0.78
+	sun.light_energy = 0.3 + lit * 1.15
+	env.ambient_light_energy = 0.2 + lit * 0.45
 	env.ambient_light_color = Color(0.32, 0.30, 0.55).lerp(Color(0.62, 0.6, 0.75), lit)
 	var night_sky := SKY_BLOOD if blood_moon else SKY_NIGHT
 	var top := night_sky.lerp(SKY_DAY, lit)

@@ -137,6 +137,26 @@ func _initialize() -> void:
 		walker.move(Vector3(1, 0, 0), 0.05)
 		min_d = minf(min_d, Vector2(walker.position.x - blocker.position.x, walker.position.z - blocker.position.z).length())
 	_check(min_d >= 1.2, "apprentices can't walk through trees")
+	# movement feel: acceleration, top speed, braking, magic hop
+	walker.position = ter.on_ground(Vector3(0, 0, 0))
+	walker.velocity = Vector3.ZERO
+	walker.move(Vector3(1, 0, 0), 0.05)
+	_check(walker.velocity.length() > 0.5 and walker.velocity.length() < Cfg.SPEED * 0.5, "movement accelerates instead of snapping to full speed")
+	for _i in range(20):
+		walker.move(Vector3(1, 0, 0), 0.05)
+	_check(is_equal_approx(walker.velocity.length(), Cfg.SPEED), "top speed is reached (10.5)")
+	for _i in range(10):
+		walker.move(Vector3.ZERO, 0.05)
+	_check(walker.velocity.length() < 0.01, "releasing the keys brakes to a stop")
+	walker.position = ter.on_ground(Vector3(0, 0, 0))
+	_check(walker.jump(), "Space starts a magic hop")
+	_check(not walker.jump(), "no double jump mid-air")
+	var peak := 0.0
+	for _i in range(40):
+		walker.move(Vector3.ZERO, 0.025)
+		peak = maxf(peak, walker.air)
+	_check(peak > 0.8 and peak < 1.6 and walker.on_ground(), "the hop arcs ~1.2 m and lands back on the ground")
+	_check(absf(walker.position.y - ter.height_at(walker.position.x, walker.position.z)) < 0.01, "after landing the apprentice stands on the terrain")
 	_check(absf(walker.position.y - ter.height_at(walker.position.x, walker.position.z)) < 0.01, "apprentices follow the ground height")
 	w._despawn(walker)
 	var grass = ter.find_child("Grass", true, false)
@@ -441,6 +461,42 @@ func _initialize() -> void:
 	_force_day(w)
 	_step(w, 0.1)
 	_check(p.dead and not w.game_over, "one fallen apprentice does not end the run")
+
+	# ---------- first-steps objectives ----------
+	w.start_game("aldric")
+	p = w.local_player
+	_force_day(w)
+	_check(w.objective_step == 0 and w.objective_info().title.begins_with("Colete"), "objective 1: gather materials")
+	p.inventory.add("grass", 3)
+	p.inventory.add("twig", 3)
+	w.tick(0.05)
+	_check(w.objective_step == 1, "gathering completes and the tool objective appears")
+	p.inventory.add("flint", 1)
+	w.craft(p, "axe")
+	w.tick(0.05)
+	_check(w.objective_step == 2, "crafting an axe completes the tool objective")
+	p.inventory.add("log", 2)
+	_build(w, p, "campfire", Vector3(3, 0, -3))
+	w.tick(0.05)
+	_check(w.objective_step == 3 and w.objective_info().text.contains("faltam"), "a campfire leads on to the Lantern Trail (shows distance)")
+	p.position = w.terrain.on_ground(Vector3(w.shrine_center.x, 0, w.shrine_center.y) + Vector3(2, 0, 0))
+	w.tick(0.05)
+	_check(w.objective_step == 4, "reaching the shrine asks for the grimoire page")
+	var shrine_page = null
+	for g in w.resources_of("page"):
+		if Vector2(g.position.x, g.position.z).distance_to(w.shrine_center) < 4.0:
+			shrine_page = g
+	_check(shrine_page != null, "the shrine altar holds a grimoire page")
+	p.position = shrine_page.position
+	w.perform(p, "interact")
+	w.tick(0.05)
+	_check(w.objective_step == 5 and w.objective_info().get("done", false), "picking the page completes the first steps")
+	w.start_game("thorne")
+	p = w.local_player
+	p.inventory.add("grass", 3)
+	p.inventory.add("twig", 2)
+	w.tick(0.05)
+	_check(w.objective_step == 2, "Thorne already holds an axe: the tool step is skipped")
 
 	# ---------- save / continue ----------
 	w.start_game("aldric")

@@ -38,6 +38,9 @@ var craft_tab := "Ferramentas"
 var craft_buttons := {}          # recipe id -> {button, cost_label, reason_label}
 var tab_buttons := {}
 var msg_t := 0.0
+var obj_panel: Panel
+var obj_title: Label
+var obj_text: Label
 var _craft_refresh_t := 0.0
 
 
@@ -75,6 +78,7 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_build_status(root)
+	_build_objective(root)
 	_build_inventory(root)
 	_build_crafting(root)
 
@@ -85,7 +89,7 @@ func _ready() -> void:
 	lbl_msg.add_theme_color_override("font_color", Color(1.0, 0.92, 0.75))
 	lbl_msg.visible = false
 
-	var hint := _label(root, "WASD mover · Q/PgUp câmera · E/Espaço agir · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · F11 tela cheia", Vector2(140, 624), 12)
+	var hint := _label(root, "WASD mover · Espaço saltar · Q/PgUp câmera · roda zoom · E agir · F/clique feitiço · Z Lume · X Escudo · 1-0 usar · botão direito ou Shift+nº: assar / combustível / largar · Tab criação · F11 tela cheia", Vector2(140, 624), 12)
 	hint.size = Vector2(1000, 20)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_color_override("font_color", Color(0.85, 0.82, 0.75, 0.75))
@@ -143,6 +147,32 @@ func _build_status(root: Control) -> void:
 	root.add_child(clock)
 	lbl_clock = _label(root, "", Vector2(1072, 16), 15, title_font)
 	lbl_clock.add_theme_color_override("font_color", GOLD)
+
+
+# ---------- current objective (top centre) ----------
+
+func _build_objective(root: Control) -> void:
+	obj_panel = Panel.new()
+	obj_panel.position = Vector2(400, 10)
+	obj_panel.size = Vector2(480, 62)
+	obj_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	obj_panel.add_theme_stylebox_override("panel", _panel_style(0.7))
+	root.add_child(obj_panel)
+	obj_title = _label(obj_panel, "", Vector2(14, 6), 16, title_font)
+	obj_title.add_theme_color_override("font_color", GOLD)
+	obj_text = _label(obj_panel, "", Vector2(14, 32), 14)
+	obj_text.size = Vector2(456, 24)
+	obj_text.clip_text = true
+
+
+func _refresh_objective(w) -> void:
+	var info: Dictionary = w.objective_info()
+	obj_panel.visible = not info.is_empty()
+	if info.is_empty():
+		return
+	obj_title.text = ("✓ " if info.get("fresh", false) else "") + String(info.title)
+	obj_text.text = info.text
+	obj_title.add_theme_color_override("font_color", Color(0.6, 1.0, 0.6) if info.get("fresh", false) else GOLD)
 
 
 # ---------- inventory bar (bottom) ----------
@@ -376,6 +406,7 @@ func refresh(p, w) -> void:
 		phase = "LUA DE SANGUE"
 	var shield := ("  Escudo %.0fs" % p.shield_t) if p.shield_t > 0.0 else ""
 	lbl_clock.text = "Dia %d · %s\nPortal %d/%d · Melhor: %d%s" % [dn.nights + 1, phase, w.run_hearts, Cfg.PORTAL_HEARTS, w.meta.best_nights, shield]
+	_refresh_objective(w)
 	for i in range(slot_views.size()):
 		_fill_slot(slot_views[i], p.inventory.slots[i])
 	_fill_slot(equip_views.hand, p.inventory.equip.hand)

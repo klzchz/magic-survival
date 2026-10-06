@@ -2,7 +2,12 @@ extends RefCounted
 # Tuning constants shared by every system. Preload as `Cfg` and read Cfg.X.
 
 const WORLD := 60.0           # ground half-extent (world spans -WORLD..WORLD on X/Z)
-const SPEED := 8.0            # apprentice move speed (units/s)
+const SPEED := 10.5           # apprentice top speed (units/s)
+const ACCEL := 42.0           # ground acceleration (units/s^2)
+const DECEL := 36.0           # ground braking (units/s^2)
+const AIR_CONTROL := 0.35     # fraction of acceleration available mid-air
+const JUMP_VELOCITY := 7.2    # take-off speed of the magic hop
+const GRAVITY := 22.0
 const DAY_LENGTH := 240.0     # seconds for a full day-night cycle (tune after playtests)
 const FIRE_RADIUS := 9.0      # campfire light/burn radius
 const WARD_RADIUS := 6.0      # bone ward repel radius
