@@ -1,4 +1,4 @@
-# 🪄 Magic Survival
+# 🪄 Magical Survive
 
 A 3D wizard-survival game on the **Don't Starve model**, set in an **original
 witchcraft universe**. You are an apprentice hurled out of a fallen college of
@@ -7,17 +7,36 @@ spells from grimoire pages, brew in your cauldron, keep the wisp-light burning
 through the night, survive the **Blood Moon**, and gather **Mist Hearts** to
 reopen the Portal: the way back to the school.
 
-> Engine: **Godot 3.5.x** · everything generated in code, zero external assets.
-> Verified headless: **50/50 smoke checks green**.
+> Engine: **Godot 4.7** (GL Compatibility) · everything generated in code, zero external assets.
+> Verified headless: **57/57 smoke checks green**.
+> Design vision (co-op for 4, magic schools, Wanderers): [`docs/GDD.md`](docs/GDD.md).
 >
-> The original Go/Ebitengine prototype that started this project lives in
-> [`legacy-go/`](legacy-go/) — same vision, first steps.
+> Earlier versions are kept for history: the Godot 3.5 build in
+> [`legacy-godot3/`](legacy-godot3/) and the original Go/Ebitengine prototype in
+> [`legacy-go/`](legacy-go/).
 
 ## Run it
 
-1. Open **Godot 3.5.x** (this is a Godot 3 project, not 4).
+1. Open **Godot 4.7+**.
 2. Import this folder (`project.godot`).
 3. Press **F5** (Play).
+
+Or from a terminal: `godot4 --path .`
+
+## Architecture (Phase 1: co-op ready foundation)
+
+```
+scenes/main.tscn         World root: DayNight, CameraRig, HUD + entity containers
+  Players/ Shadows/ Resources/ Structures/ Decor/   (MultiplayerSpawner-ready)
+scenes/*.tscn            one scene per entity (wizard, shadow, gatherable, structure, portal, hud)
+scripts/world.gd         orchestrator: island gen, loop, perform(player, action) dispatcher
+scripts/entities/        wizard (per-apprentice stats + inventory), shadow AI, gatherable, structure, portal
+scripts/systems/         day_night clock + sky, Don't Starve camera rig
+scripts/core/            config constants, code-only art kit, meta save
+```
+
+Every action goes through `world.perform(player, action)`, and Shadows hunt the
+nearest living apprentice, so Phase 2 (network co-op) only adds peers and RPCs.
 
 ## The loop
 
@@ -73,7 +92,7 @@ reopen the Portal: the way back to the school.
 Headless smoke suite (no editor needed):
 
 ```sh
-godot-headless --path . -s test/smoke.gd   # 50 checks, exits 0 on green
+godot4 --headless --path . -s test/smoke.gd   # 57 checks, exits 0 on green
 ```
 
 Covers: world + ruins spawn, gather/chop/mine, eat/brew/cook, campfire,
